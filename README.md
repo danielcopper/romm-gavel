@@ -13,8 +13,7 @@ gavel is the decision half of the story. [sigil](https://github.com/rommforge/ar
 1. **`SPEC.md`** — the decision rules, written down: the inputs, every branch of the decision table, and the safety invariants (no destructive action without a recovery source; never silently overwrite an unbacked local edit; a corrupt or implausibly shrunken local never auto-uploads; overwrite only on an explicit keep-local; the server's 409 as the write-time backstop).
 2. **`vectors/`** — the decision table as language-neutral JSON conformance vectors (`input → expected action`). Any implementation in any language can run them and prove it decides the same way.
 3. **`reference/`** — a pure-Python reference implementation, extracted from decky-romm-sync's production kernel.
-
-Maybe later, if there is demand: a native core with a C ABI plus per-language bindings, for clients that want a drop-in instead of maintaining their own implementation.
+4. **Planned: a native core** with a C ABI plus per-language bindings (sigil-style), for clients that want a drop-in instead of maintaining their own implementation. Spec and vectors come first — they define what the core must do and prove it does it.
 
 ## What does not live here
 
