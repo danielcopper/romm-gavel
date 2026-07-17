@@ -8,6 +8,8 @@ Every RomM client that syncs saves has to answer the same question: local save v
 
 gavel is the decision half of the story. [sigil](https://github.com/rommforge/argosy-sigil) answers *"which game is this and what will its save be called"* — gavel answers *"which copy of the save wins"*.
 
+The rules are not save-specific either: anything RomM syncs as a local-file-vs-server-version pair gets the same decision table — saves today, save states as the natural next consumer.
+
 ## What lives here
 
 1. **`SPEC.md`** — the decision rules, written down: the inputs, every branch of the decision table, and the safety invariants (no destructive action without a recovery source; never silently overwrite an unbacked local edit; a corrupt or implausibly shrunken local never auto-uploads; overwrite only on an explicit keep-local; the server's 409 as the write-time backstop).
