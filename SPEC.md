@@ -4,7 +4,9 @@ Status: **draft, extraction in progress** from decky-romm-sync `domain/sync_acti
 
 ## Scope
 
-One decision per `(rom, filename, slot)` triple: given the local file, the server saves in the slot, and what this device knows about its last sync, return exactly one action — `skip`, `upload`, `download`, or `conflict`. Resolution of a `conflict` (keep-local vs use-server) is a user decision and out of scope for the automatic path; the spec only defines *when* it must be surfaced.
+The layer RomM's Device Sync delegates to clients. **Detection (which side changed) is out of scope** — negotiate owns it. Normative here: what a client records at each sync boundary (its own baseline hash plus the server-stamped `content_hash`), the 409/conflict resolution ladder, overwrite discipline, and the safety invariants. Resolution of a surfaced conflict (keep-local vs use-server) is a user decision; the spec defines *when* it must be surfaced, never picks the winner.
+
+The full per-`(rom, filename, slot)` decision table below is **informative**: it documents the reference client's model, which keeps detection client-side by choice. Clients that consume negotiate's verdicts directly still need the normative parts — the bookkeeping and the ladder are exactly where shipped clients diverge today.
 
 ## Inputs
 
