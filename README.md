@@ -52,7 +52,9 @@ slot state differently is the problem this solves.
 
 ## Status
 
-Early — extraction in progress. The rules come from a production implementation
+Early. The 409 resolution ladder is extracted end-to-end: normative spec sections (bookkeeping, identity check, ladder,
+overwrite discipline), a curated plus exhaustive vector set under `vectors/ladder/`, and the reference implementation
+running every vector in CI. The decision-table vector family is next. The rules come from a production implementation
 ([decky-romm-sync](https://github.com/danielcopper/decky-romm-sync)) that has been through a fair number of real
 conflict edge cases: baseline drift vs byte-identical restores, corrupt/truncated locals, both-sides-moved divergence,
 and stale-snapshot upload races.

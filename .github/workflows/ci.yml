@@ -14,7 +14,18 @@ jobs:
         with:
           deno-version: v2.x
       - name: Check markdown formatting
-        run: deno fmt --check "**/*.md"
+        run: deno fmt --check
 
-  # Vector-schema validation and the reference-implementation test run are added
-  # once vectors/ and reference/ carry content (tracked in decky-romm-sync#1461).
+  vectors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate vector file shape
+        run: python scripts/validate_vectors.py
+      - name: Run vectors against the reference implementation
+        run: |
+          pip install pytest
+          python -m pytest reference/tests -q
