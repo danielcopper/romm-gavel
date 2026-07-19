@@ -1,6 +1,7 @@
 # Conformance vectors
 
-Language-neutral JSON test vectors: one file per decision-table region, each vector an `{input, expected}` pair. Seeded from decky-romm-sync's hand-enumerated matrix tests and its property-test corpus.
+Language-neutral JSON test vectors: one file per decision-table region, each vector an `{input, expected}` pair. Seeded
+from decky-romm-sync's hand-enumerated matrix tests and its property-test corpus.
 
 Format (draft):
 

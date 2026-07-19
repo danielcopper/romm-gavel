@@ -1,0 +1,7 @@
+{
+  "fmt": {
+    "include": ["**/*.md"],
+    "proseWrap": "always",
+    "lineWidth": 120
+  }
+}
