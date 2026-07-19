@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  markdown-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check markdown formatting
+        run: deno fmt --check "**/*.md"
+
+  # Vector-schema validation and the reference-implementation test run are added
+  # once vectors/ and reference/ carry content (tracked in decky-romm-sync#1461).

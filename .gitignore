@@ -1,0 +1,6 @@
+# Python reference implementation artifacts
+__pycache__/
+*.py[cod]
+.venv/
+.hypothesis/
+.pytest_cache/
