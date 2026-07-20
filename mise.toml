@@ -14,7 +14,7 @@ run = "uv pip install pytest"
 description = "Build the core as a shared library (build/libgavel.so)"
 run = [
     "mkdir -p build",
-    "zig cc -std=c99 -Wall -Wextra -Werror -pedantic -fPIC -shared -O2 core/gavel.c -o build/libgavel.so",
+    "zig cc -std=c99 -Wall -Wextra -Werror -pedantic -fno-builtin -fPIC -shared -O2 core/gavel.c -o build/libgavel.so",
 ]
 
 [tasks.test]
