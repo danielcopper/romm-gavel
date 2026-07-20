@@ -60,10 +60,19 @@ Inputs are the four hash values of the ladder (`local_hash`, `last_sync_hash`, `
   absent / empty / one of up to four distinct values, canonicalized by first occurrence). 151 classes — complete over
   the abstraction, so any behavioral divergence from the ladder shows up here by construction.
 
-## Planned families
+## `decision-table/` — the full sync decision
 
-- `decision-table/` — the full per-`(rom, filename, slot)` decision (informative in SPEC.md, but vectors let a client
-  that adopts the reference model prove it): inputs as in the SPEC's Inputs table, expected as
-  `{action, adopt_baseline?}`. This family is also what exercises the identity check's **provenance route**: inside the
-  ladder that route is subsumed by L1, so the ladder vectors constrain only the parity route — a port's provenance leg
-  is proven here, not above.
+The per-`(rom, filename, slot)` decision of the reference model (informative in SPEC.md — clients that consume
+negotiate's verdicts directly don't need this family; clients that compute detection themselves can prove their model
+with it). Inputs mirror the SPEC's Inputs table: `local_file` (object or `null`), `server_saves_in_slot` (list of RomM
+save objects), `files_state` (the bookkeeping record, keys may be absent), `device_id`, `local_hash`. `expected` is a
+tagged object: `{action: "skip", reason, adopt_baseline}`, `{action: "upload", target_save_id}`, or
+`{action: "download" | "conflict", server_save_id}`.
+
+- `named-cases.json` — curated cases across every branch and row of the decision table: head selection (newest
+  `updated_at`, unparseable loses), all three `device_syncs` branches, the corrupt-local guard, and the timestamp
+  fall-through. Timestamps in inputs always carry an explicit UTC offset so parsing is environment-independent.
+
+This family is also what exercises the identity check's **provenance route**: inside the ladder that route is subsumed
+by L1, so the ladder vectors constrain only the parity route — a port's provenance leg is proven here
+(`never-synced-provenance-dedup`), not above.

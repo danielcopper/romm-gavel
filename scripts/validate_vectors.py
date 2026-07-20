@@ -1,16 +1,16 @@
 """Validate the shape of every vector file under vectors/. Stdlib only.
 
 Catches malformed vectors independently of the reference test run: a vector
-file must parse, carry the family header, and every vector must have exactly
-the declared input fields with hash-or-unknown values and a valid expected
-action.
+file must parse, carry the family header matching its directory, and every
+vector must have exactly the family's declared input fields and a well-formed
+expected value.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import NoReturn
+from typing import Any, NoReturn
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -22,49 +22,163 @@ LADDER_INPUT_FIELDS = {
 }
 LADDER_EXPECTED = {"download", "conflict"}
 
+TABLE_INPUT_FIELDS = {
+    "local_file",
+    "server_saves_in_slot",
+    "files_state",
+    "device_id",
+    "local_hash",
+}
+TABLE_FILES_STATE_FIELDS = {"last_sync_hash", "last_sync_server_hash", "last_sync_local_size"}
+TABLE_ACTIONS = {"skip", "upload", "download", "conflict"}
 
-def fail(path: Path, message: str) -> NoReturn:
-    print(f"{path.relative_to(REPO_ROOT)}: {message}")
-    raise SystemExit(1)
+
+class VectorError(Exception):
+    pass
 
 
-def validate_ladder_file(path: Path) -> int:
+def fail(message: str) -> NoReturn:
+    raise VectorError(message)
+
+
+def _hash_or_unknown(name: str, field: str, value: Any) -> None:
+    if value is not None and not isinstance(value, str):
+        fail(f"{name}: {field} must be a string or null")
+
+
+def validate_ladder_vector(vector: dict[str, Any]) -> None:
+    name = vector["name"]
+    inp = vector.get("input")
+    if not isinstance(inp, dict) or set(inp) != LADDER_INPUT_FIELDS:
+        fail(f"{name}: input must have exactly the fields {sorted(LADDER_INPUT_FIELDS)}")
+    for field, value in inp.items():
+        _hash_or_unknown(name, field, value)
+    if vector.get("expected") not in LADDER_EXPECTED:
+        fail(f"{name}: expected must be one of {sorted(LADDER_EXPECTED)}")
+
+
+def _validate_local_file(name: str, local_file: Any) -> None:
+    if local_file is None:
+        return
+    if not isinstance(local_file, dict):
+        fail(f"{name}: local_file must be an object or null")
+    if not isinstance(local_file.get("filename"), str):
+        fail(f"{name}: local_file.filename must be a string")
+    size = local_file.get("size")
+    if size is not None and not isinstance(size, int):
+        fail(f"{name}: local_file.size must be an integer or null")
+    mtime = local_file.get("mtime")
+    if mtime is not None and not isinstance(mtime, int | float):
+        fail(f"{name}: local_file.mtime must be a number or null")
+
+
+def _validate_server_saves(name: str, saves: Any) -> None:
+    if not isinstance(saves, list):
+        fail(f"{name}: server_saves_in_slot must be a list")
+    for save in saves:
+        if not isinstance(save, dict) or not isinstance(save.get("id"), int):
+            fail(f"{name}: every server save must be an object with an integer id")
+        if not isinstance(save.get("updated_at"), str):
+            fail(f"{name}: server save {save.get('id')}: updated_at must be a string")
+        _hash_or_unknown(name, f"server save {save.get('id')} content_hash", save.get("content_hash"))
+        syncs = save.get("device_syncs")
+        if not isinstance(syncs, list):
+            fail(f"{name}: server save {save.get('id')}: device_syncs must be a list")
+        for entry in syncs:
+            if (
+                not isinstance(entry, dict)
+                or not isinstance(entry.get("device_id"), str)
+                or not isinstance(entry.get("is_current"), bool)
+            ):
+                fail(f"{name}: device_syncs entries must be {{device_id: string, is_current: bool}}")
+
+
+def _validate_table_expected(name: str, expected: Any) -> None:
+    if not isinstance(expected, dict) or expected.get("action") not in TABLE_ACTIONS:
+        fail(f"{name}: expected.action must be one of {sorted(TABLE_ACTIONS)}")
+    action = expected["action"]
+    if action == "skip":
+        if set(expected) != {"action", "reason", "adopt_baseline"}:
+            fail(f"{name}: skip expects exactly action/reason/adopt_baseline")
+        if not isinstance(expected["reason"], str) or not isinstance(expected["adopt_baseline"], bool):
+            fail(f"{name}: skip reason must be a string, adopt_baseline a bool")
+    elif action == "upload":
+        if set(expected) != {"action", "target_save_id"}:
+            fail(f"{name}: upload expects exactly action/target_save_id")
+        if expected["target_save_id"] is not None and not isinstance(expected["target_save_id"], int):
+            fail(f"{name}: upload target_save_id must be an integer or null")
+    else:
+        if set(expected) != {"action", "server_save_id"}:
+            fail(f"{name}: {action} expects exactly action/server_save_id")
+        if not isinstance(expected["server_save_id"], int):
+            fail(f"{name}: {action} server_save_id must be an integer")
+
+
+def validate_table_vector(vector: dict[str, Any]) -> None:
+    name = vector["name"]
+    inp = vector.get("input")
+    if not isinstance(inp, dict) or set(inp) != TABLE_INPUT_FIELDS:
+        fail(f"{name}: input must have exactly the fields {sorted(TABLE_INPUT_FIELDS)}")
+    _validate_local_file(name, inp["local_file"])
+    _validate_server_saves(name, inp["server_saves_in_slot"])
+    files_state = inp["files_state"]
+    if not isinstance(files_state, dict) or not set(files_state) <= TABLE_FILES_STATE_FIELDS:
+        fail(f"{name}: files_state keys must be a subset of {sorted(TABLE_FILES_STATE_FIELDS)}")
+    _hash_or_unknown(name, "files_state.last_sync_hash", files_state.get("last_sync_hash"))
+    _hash_or_unknown(name, "files_state.last_sync_server_hash", files_state.get("last_sync_server_hash"))
+    size = files_state.get("last_sync_local_size")
+    if size is not None and not isinstance(size, int):
+        fail(f"{name}: files_state.last_sync_local_size must be an integer or null")
+    if not isinstance(inp["device_id"], str):
+        fail(f"{name}: device_id must be a string")
+    _hash_or_unknown(name, "local_hash", inp["local_hash"])
+    _validate_table_expected(name, vector.get("expected"))
+
+
+FAMILIES = {
+    "ladder": ("upload-409-ladder", validate_ladder_vector),
+    "decision-table": ("decision-table", validate_table_vector),
+}
+
+
+def validate_file(path: Path, family_name: str, validate_vector) -> int:
     try:
         data = json.loads(path.read_text())
     except json.JSONDecodeError as exc:
-        fail(path, f"not valid JSON: {exc}")
+        fail(f"not valid JSON: {exc}")
     for key in ("family", "spec", "description", "vectors"):
         if key not in data:
-            fail(path, f"missing top-level key {key!r}")
-    if data["family"] != "upload-409-ladder":
-        fail(path, f"unknown family {data['family']!r}")
+            fail(f"missing top-level key {key!r}")
+    if data["family"] != family_name:
+        fail(f"family must be {family_name!r}, got {data['family']!r}")
     names = set()
     for idx, vector in enumerate(data["vectors"]):
-        where = f"vector #{idx}"
         name = vector.get("name")
         if not isinstance(name, str) or not name:
-            fail(path, f"{where}: missing or empty name")
+            fail(f"vector #{idx}: missing or empty name")
         if name in names:
-            fail(path, f"{where}: duplicate name {name!r}")
+            fail(f"vector #{idx}: duplicate name {name!r}")
         names.add(name)
-        inp = vector.get("input")
-        if not isinstance(inp, dict) or set(inp) != LADDER_INPUT_FIELDS:
-            fail(path, f"{name}: input must have exactly the fields {sorted(LADDER_INPUT_FIELDS)}")
-        for field, value in inp.items():
-            if value is not None and not isinstance(value, str):
-                fail(path, f"{name}: {field} must be a string or null")
-        if vector.get("expected") not in LADDER_EXPECTED:
-            fail(path, f"{name}: expected must be one of {sorted(LADDER_EXPECTED)}")
+        validate_vector(vector)
     return len(data["vectors"])
 
 
 def main() -> None:
-    files = sorted((REPO_ROOT / "vectors" / "ladder").glob("*.json"))
-    if not files:
-        print("no vector files found under vectors/ladder/")
-        raise SystemExit(1)
-    total = sum(validate_ladder_file(path) for path in files)
-    print(f"OK: {total} vectors across {len(files)} files")
+    total = 0
+    file_count = 0
+    for directory, (family_name, validate_vector) in sorted(FAMILIES.items()):
+        files = sorted((REPO_ROOT / "vectors" / directory).glob("*.json"))
+        if not files:
+            print(f"no vector files found under vectors/{directory}/")
+            raise SystemExit(1)
+        for path in files:
+            try:
+                total += validate_file(path, family_name, validate_vector)
+            except VectorError as exc:
+                print(f"{path.relative_to(REPO_ROOT)}: {exc}")
+                raise SystemExit(1) from None
+            file_count += 1
+    print(f"OK: {total} vectors across {file_count} files")
 
 
 if __name__ == "__main__":

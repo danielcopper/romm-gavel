@@ -151,5 +151,6 @@ Notes:
 An implementation is conformant when it produces the expected action for every vector in `vectors/`. Vectors are the
 normative artifact; prose explains, vectors decide.
 
-Current coverage: the 409 resolution ladder (`vectors/ladder/`) — a curated named set plus the exhaustive
-equivalence-class set over the four hash inputs. The decision-table vector family is planned next.
+Current coverage: the 409 resolution ladder (`vectors/ladder/` — a curated named set plus the exhaustive
+equivalence-class set over the four hash inputs) and the decision table (`vectors/decision-table/` — curated named cases
+across every branch and row above, including both identity routes and the timestamp fall-through).

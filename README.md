@@ -53,9 +53,11 @@ slot state differently is the problem this solves.
 
 ## Status
 
-Early. The 409 resolution ladder is extracted end-to-end: normative spec sections (bookkeeping, identity check, ladder,
-overwrite discipline), a curated plus exhaustive vector set under `vectors/ladder/`, and the reference implementation
-running every vector in CI. The decision-table vector family is next. The rules come from a production implementation
+Early, but both planned vector families exist. The 409 resolution ladder is extracted end-to-end: normative spec
+sections (bookkeeping, identity check, ladder, overwrite discipline), a curated plus exhaustive vector set under
+`vectors/ladder/`, and the reference implementation running every vector in CI. The decision-table family
+(`vectors/decision-table/`) covers the full informative decision model the same way — including the provenance identity
+route the ladder vectors can't reach. The rules come from a production implementation
 ([decky-romm-sync](https://github.com/danielcopper/decky-romm-sync)) that has been through a fair number of real
 conflict edge cases: baseline drift vs byte-identical restores, corrupt/truncated locals, both-sides-moved divergence,
 and stale-snapshot upload races.
