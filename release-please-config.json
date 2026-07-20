@@ -5,6 +5,8 @@
   "bump-patch-for-minor-pre-major": false,
   "include-component-in-tag": false,
   "packages": {
-    ".": {}
+    ".": {
+      "initial-version": "0.1.0"
+    }
   }
 }
