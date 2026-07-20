@@ -60,7 +60,9 @@ jobs:
             echo "ERROR: library gained a shared-library dependency"
             exit 1
           fi
-          if nm -D --undefined-only libgavel-guard.so | grep .; then
-            echo "ERROR: library has undefined symbols"
+          # Only GLOBAL undefined symbols (nm type "U") are real dependencies —
+          # gcc's crt stubs add harmless WEAK ones to every .so.
+          if nm -D --undefined-only libgavel-guard.so | grep ' U '; then
+            echo "ERROR: library has global undefined symbols"
             exit 1
           fi

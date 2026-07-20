@@ -67,8 +67,12 @@ jobs:
             echo "ERROR: library gained a shared-library dependency"
             exit 1
           fi
-          if nm -D --undefined-only libgavel-x86_64-linux.so | grep .; then
-            echo "ERROR: library has undefined symbols"
+          # Only GLOBAL undefined symbols (nm type "U") are real dependencies.
+          # gcc's crt stubs add WEAK undefined symbols (__cxa_finalize,
+          # __gmon_start__) to every .so — the loader nulls them harmlessly
+          # when absent, on any libc.
+          if nm -D --undefined-only libgavel-x86_64-linux.so | grep ' U '; then
+            echo "ERROR: library has global undefined symbols"
             exit 1
           fi
 
