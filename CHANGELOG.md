@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/danielcopper/romm-gavel/compare/v0.1.0...v0.2.0) (2026-07-20)
+
+
+### Features
+
+* official python binding for the native core ([#13](https://github.com/danielcopper/romm-gavel/issues/13)) ([4a969a7](https://github.com/danielcopper/romm-gavel/commit/4a969a7059b4bff7361932494cc8cdea4eb2749d))
+
 ## 0.1.0 (2026-07-20)
 
 
