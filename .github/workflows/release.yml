@@ -18,6 +18,9 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       # Mint a GitHub App installation token so release-please's PR/branch
       # pushes are authored by the App, not GITHUB_TOKEN. Pushes made with
@@ -33,7 +36,52 @@ jobs:
           permission-pull-requests: write
 
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        id: release
         with:
           token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  core-artifact:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the shared library
+        run: cc -std=c99 -Wall -Wextra -Werror -pedantic -fPIC -shared -O2 core/gavel.c -o libgavel-x86_64-linux.so
+
+      - name: Guard portability (no modern glibc symbol requirements)
+        run: |
+          # Consumers (Steam Deck first) run older glibc than this runner. The
+          # core only uses ancient symbols (strcmp), so nothing newer than
+          # GLIBC_2.17 may appear — a toolchain change that silently pulls in a
+          # modern symbol version must fail the release, not the user's device.
+          readelf --version-info libgavel-x86_64-linux.so | grep -oE 'GLIBC_2\.[0-9]+' | sort -u || true
+          MAX=$(readelf --version-info libgavel-x86_64-linux.so | grep -oE 'GLIBC_2\.[0-9]+' | cut -d. -f2 | sort -n | tail -1)
+          if [ -n "$MAX" ] && [ "$MAX" -gt 17 ]; then
+            echo "ERROR: library requires GLIBC_2.$MAX (> 2.17)"
+            exit 1
+          fi
+
+      - name: Smoke-test load and decide
+        run: |
+          python3 - <<'EOF'
+          import ctypes
+          lib = ctypes.CDLL("./libgavel-x86_64-linux.so")
+          lib.gavel_resolve_upload_conflict.argtypes = [ctypes.c_char_p] * 4
+          lib.gavel_resolve_upload_conflict.restype = ctypes.c_int
+          assert lib.gavel_resolve_upload_conflict(b"a" * 32, b"a" * 32, None, None) == 0
+          assert lib.gavel_resolve_upload_conflict(None, None, None, None) == 1
+          print("smoke ok")
+          EOF
+
+      - name: Checksum and attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          sha256sum libgavel-x86_64-linux.so > libgavel-x86_64-linux.so.sha256
+          gh release upload "$TAG" libgavel-x86_64-linux.so libgavel-x86_64-linux.so.sha256 --clobber
