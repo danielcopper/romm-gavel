@@ -4,8 +4,25 @@ on:
   push:
     branches: [main]
   pull_request:
+    # "edited" re-runs the checks when the PR title/body changes — the
+    # breaking-change gate reads the title, so a late edit must re-evaluate.
+    types: [opened, edited, synchronize, reopened]
 
 jobs:
+  breaking-gate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Require the breaking-change marker when the vector contract changes
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 scripts/check_vector_breaking_change.py "origin/$BASE_REF"
+
   markdown-format:
     runs-on: ubuntu-latest
     steps:
