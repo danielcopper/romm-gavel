@@ -4,5 +4,15 @@
   "extraPaths": ["reference"],
   "venvPath": ".",
   "venv": ".venv",
-  "exclude": [".venv", "build", ".claude"]
+  "exclude": [".venv", "build", ".claude"],
+  "reportMissingModuleSource": "none",
+  "reportMissingImports": "warning",
+  "reportPrivateUsage": "error",
+  "reportRedeclaration": "none",
+  "reportUnusedParameter": "none",
+  "reportUnusedVariable": "warning",
+  "reportArgumentType": "error",
+  "reportUnnecessaryComparison": "error",
+  "reportUnnecessaryIsInstance": "error",
+  "reportMissingTypeArgument": "error"
 }

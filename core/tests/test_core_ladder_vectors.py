@@ -76,10 +76,10 @@ def _encode(value: str | None) -> bytes | None:
     return value.encode("utf-8")
 
 
-def _load_vectors() -> list:
+def _load_vectors() -> list[object]:
     files = sorted(_VECTOR_DIR.glob("*.json"))
     assert files, f"no vector files found in {_VECTOR_DIR}"
-    params = []
+    params: list[object] = []
     for path in files:
         data = json.loads(path.read_text())
         for vector in data["vectors"]:
