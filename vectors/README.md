@@ -11,13 +11,29 @@ implementation.
 
 ## Testing your implementation
 
-1. **Copy the family's JSON files into your repo** (recommended over fetching at test time: no network in CI, and a
-   vector update shows up as a reviewable diff on your side). Note the gavel commit you copied at, so updates are
+1. **Copy the JSON files of the family you want to conform to into your repo** — today there is one family, so that
+   means the two files in `vectors/ladder/`. Copying is recommended over fetching at test time: no network in CI, and a
+   vector update shows up as a reviewable diff on your side. Note the gavel commit you copied at, so updates are
    deliberate.
 2. **Write a small adapter** from the vector input to your function. Your code probably doesn't take four loose hash
-   parameters — Grout's `resolveUpload409` and Argosy's conflict resolution take richer objects. The adapter extracts
-   the family's input fields, calls your implementation, and maps your outcome onto the family's expected values
-   (`"download"` / `"conflict"` for the ladder).
+   parameters but the objects it already passes around internally — the adapter is just the repackaging: extract the
+   family's input fields, call your implementation, and map your outcome onto the family's expected values (`"download"`
+   / `"conflict"` for the ladder). In a TypeScript client it looks like this:
+
+   ```ts
+   import cases from "./gavel-vectors/named-cases.json";
+
+   for (const vector of cases.vectors) {
+     const got = resolveUpload409({
+       localHash: vector.input.local_hash, // null must stay null, "" must stay ""
+       baselineHash: vector.input.last_sync_hash,
+       serverHash: vector.input.server_content_hash,
+       rememberedServerHash: vector.input.last_sync_server_hash,
+     });
+     assert(got === vector.expected, `${vector.name}: ${vector.rationale ?? ""}`);
+   }
+   ```
+
 3. **Run every vector and compare against `expected`.** One test case per vector, named after the vector's `name`, so a
    failure points at a specific, documented scenario (curated vectors carry the reasoning in `rationale`).
 
