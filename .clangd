@@ -1,4 +1,6 @@
 CompileFlags:
   # -xc pins the language to C — without a compile database clangd guesses the
   # language of a bare header (Objective-C++!), which rejects -std=c99.
-  Add: [-xc, -std=c99, -Wall, -Wextra, -pedantic]
+  # -Wno-empty-translation-unit: clangd parses headers standalone, where the
+  # pedantic empty-TU warning is noise; real builds keep full -pedantic.
+  Add: [-xc, -std=c99, -Wall, -Wextra, -pedantic, -Wno-empty-translation-unit]
