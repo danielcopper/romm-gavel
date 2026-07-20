@@ -9,6 +9,31 @@ An implementation is conformant with a family when it produces `expected` for ev
 `scripts/validate_vectors.py` checks the file shape; `reference/tests/` runs every vector against the reference
 implementation.
 
+## Testing your implementation
+
+1. **Copy the family's JSON files into your repo** (recommended over fetching at test time: no network in CI, and a
+   vector update shows up as a reviewable diff on your side). Note the gavel commit you copied at, so updates are
+   deliberate.
+2. **Write a small adapter** from the vector input to your function. Your code probably doesn't take four loose hash
+   parameters — Grout's `resolveUpload409` and Argosy's conflict resolution take richer objects. The adapter extracts
+   the family's input fields, calls your implementation, and maps your outcome onto the family's expected values
+   (`"download"` / `"conflict"` for the ladder).
+3. **Run every vector and compare against `expected`.** One test case per vector, named after the vector's `name`, so a
+   failure points at a specific, documented scenario (curated vectors carry the reasoning in `rationale`).
+
+Two traps:
+
+- **`null` and `""` are different on purpose.** `null` means the value is unknown/absent; `""` is an empty string that
+  an implementation might wrongly treat as a real hash. Your adapter must preserve the distinction — a JSON loader or
+  type mapping that collapses both onto one "falsy" value will still pass (the expected outcome is the same today), but
+  it erases exactly the edge the two encodings exist to probe.
+- **Hash strings are opaque placeholders.** Only presence and equality carry meaning — never length-check, parse, or
+  recompute them.
+
+Worked examples: `reference/tests/test_ladder_vectors.py` in this repo (the reference runner, ~40 lines), and
+decky-romm-sync's `tests/domain/test_sync_action_gavel_vectors.py` with its `tests/domain/gavel_vectors/README.md` (the
+vendoring pattern in a real client).
+
 ## `ladder/` — the 409 resolution ladder
 
 Inputs are the four hash values of the ladder (`local_hash`, `last_sync_hash`, `server_content_hash`,

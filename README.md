@@ -29,7 +29,8 @@ contract — saves today, save states as the natural next consumer.
    (uncertainty never counts as a match; never destroy the only copy; a corrupt or implausibly shrunken local never
    auto-uploads; force-overwrite only on an explicit user choice).
 2. **`vectors/`** — language-neutral JSON conformance vectors, starting with the 409/conflict resolution ladder
-   (`input → expected action`). Any implementation in any language can run them and prove it decides the same way.
+   (`input → expected action`). Any implementation in any language can run them and prove it decides the same way —
+   [`vectors/README.md`](vectors/README.md) has the how-to for pointing your own implementation at them.
 3. **`reference/`** — a pure-Python reference implementation, extracted from decky-romm-sync's production kernel.
 4. **Planned: a native core** with a C ABI plus per-language bindings (sigil-style), for clients that want a drop-in
    instead of maintaining their own implementation. Spec and vectors come first — they define what the core must do and
