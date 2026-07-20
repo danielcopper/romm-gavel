@@ -51,18 +51,24 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Build the shared library
-        run: cc -std=c99 -Wall -Wextra -Werror -pedantic -fPIC -shared -O2 core/gavel.c -o libgavel-x86_64-linux.so
+        # -fno-builtin: the core is freestanding (no libc imports); without it
+        # the optimizer may recognize the inlined comparison loop and emit a
+        # strcmp libcall, silently reintroducing the dependency.
+        run: cc -std=c99 -Wall -Wextra -Werror -pedantic -fno-builtin -fPIC -shared -O2 core/gavel.c -o libgavel-x86_64-linux.so
 
-      - name: Guard portability (no modern glibc symbol requirements)
+      - name: Guard portability (zero dependencies)
         run: |
-          # Consumers (Steam Deck first) run older glibc than this runner. The
-          # core only uses ancient symbols (strcmp), so nothing newer than
-          # GLIBC_2.17 may appear — a toolchain change that silently pulls in a
-          # modern symbol version must fail the release, not the user's device.
-          readelf --version-info libgavel-x86_64-linux.so | grep -oE 'GLIBC_2\.[0-9]+' | sort -u || true
-          MAX=$(readelf --version-info libgavel-x86_64-linux.so | grep -oE 'GLIBC_2\.[0-9]+' | cut -d. -f2 | sort -n | tail -1)
-          if [ -n "$MAX" ] && [ "$MAX" -gt 17 ]; then
-            echo "ERROR: library requires GLIBC_2.$MAX (> 2.17)"
+          # The artifact must load on ANY x86_64 Linux — SteamOS, Ubuntu,
+          # Bazzite, musl, anything. The strongest form of that promise is
+          # "depends on nothing": no NEEDED libraries, no undefined symbols.
+          # A toolchain change that reintroduces an import fails the release,
+          # not the consumer's device.
+          if readelf -d libgavel-x86_64-linux.so | grep NEEDED; then
+            echo "ERROR: library gained a shared-library dependency"
+            exit 1
+          fi
+          if nm -D --undefined-only libgavel-x86_64-linux.so | grep .; then
+            echo "ERROR: library has undefined symbols"
             exit 1
           fi
 

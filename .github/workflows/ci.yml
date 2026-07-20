@@ -51,3 +51,16 @@ jobs:
             -fsanitize=address,undefined -fno-sanitize-recover=all \
             core/tests/exhaustive_driver.c core/gavel.c -o gavel_driver
           ./gavel_driver
+      - name: Guard the core stays freestanding (zero dependencies)
+        # Same guard the release pipeline enforces on the shipped artifact —
+        # here so a PR that reintroduces a libc import fails before merge.
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -pedantic -fno-builtin -fPIC -shared -O2 core/gavel.c -o libgavel-guard.so
+          if readelf -d libgavel-guard.so | grep NEEDED; then
+            echo "ERROR: library gained a shared-library dependency"
+            exit 1
+          fi
+          if nm -D --undefined-only libgavel-guard.so | grep .; then
+            echo "ERROR: library has undefined symbols"
+            exit 1
+          fi
