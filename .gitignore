@@ -4,3 +4,9 @@ __pycache__/
 .venv/
 .hypothesis/
 .pytest_cache/
+
+# Native core build artifacts
+*.so
+*.o
+*.out
+build/

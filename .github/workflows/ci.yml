@@ -29,3 +29,25 @@ jobs:
         run: |
           pip install pytest
           python -m pytest reference/tests -q
+      - name: Type-check (basedpyright)
+        run: |
+          pip install basedpyright
+          basedpyright
+
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Run the native-core vectors + differential (system cc)
+        run: |
+          pip install pytest
+          python -m pytest core/tests -q
+      - name: Compile and run the exhaustive driver under ASan/UBSan
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -pedantic -O1 -g \
+            -fsanitize=address,undefined -fno-sanitize-recover=all \
+            core/tests/exhaustive_driver.c core/gavel.c -o gavel_driver
+          ./gavel_driver

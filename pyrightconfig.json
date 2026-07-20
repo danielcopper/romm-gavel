@@ -1,0 +1,16 @@
+{
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "extraPaths": ["reference"],
+  "exclude": [".venv", "build", ".claude"],
+  "reportMissingModuleSource": "none",
+  "reportMissingImports": "warning",
+  "reportPrivateUsage": "error",
+  "reportRedeclaration": "none",
+  "reportUnusedParameter": "none",
+  "reportUnusedVariable": "warning",
+  "reportArgumentType": "error",
+  "reportUnnecessaryComparison": "error",
+  "reportUnnecessaryIsInstance": "error",
+  "reportMissingTypeArgument": "error"
+}
