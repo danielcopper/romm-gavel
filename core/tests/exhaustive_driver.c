@@ -19,27 +19,20 @@
 
 /* Independent oracle — coded from the spec, not shared with gavel.c. */
 
-static int is_truthy(const char *s) {
-    return s != NULL && s[0] != '\0';
-}
+static int is_truthy(const char *s) { return s != NULL && s[0] != '\0'; }
 
-static int truthy_equal(const char *a, const char *b) {
-    return is_truthy(a) && is_truthy(b) && strcmp(a, b) == 0;
-}
+static int truthy_equal(const char *a, const char *b) { return is_truthy(a) && is_truthy(b) && strcmp(a, b) == 0; }
 
 /* Independent re-derivation of the identity check. */
-static int oracle_matches(const char *local, const char *server,
-                          const char *last_sync, const char *last_sync_server) {
-    int provenance = truthy_equal(local, last_sync) &&
-                     truthy_equal(last_sync_server, server);
+static int oracle_matches(const char *local, const char *server, const char *last_sync, const char *last_sync_server) {
+    int provenance = truthy_equal(local, last_sync) && truthy_equal(last_sync_server, server);
     int parity = truthy_equal(local, server);
     return provenance || parity;
 }
 
 /* Independent re-derivation of the ladder: DOWNLOAD iff L1 or parity or
  * provenance, else CONFLICT. */
-static gavel_resolution oracle_resolve(const char *local, const char *last_sync,
-                                       const char *server,
+static gavel_resolution oracle_resolve(const char *local, const char *last_sync, const char *server,
                                        const char *last_sync_server) {
     int l1 = truthy_equal(local, last_sync);
     int identity = oracle_matches(local, server, last_sync, last_sync_server);
@@ -64,28 +57,21 @@ int main(void) {
                     const char *server = alphabet[c];
                     const char *last_sync_server = alphabet[d];
 
-                    int m = gavel_local_matches_server(local, server, last_sync,
-                                                       last_sync_server);
-                    gavel_resolution r = gavel_resolve_upload_conflict(
-                        local, last_sync, server, last_sync_server);
+                    int m = gavel_local_matches_server(local, server, last_sync, last_sync_server);
+                    gavel_resolution r = gavel_resolve_upload_conflict(local, last_sync, server, last_sync_server);
 
                     /* Results in range. */
                     if (m != 0 && m != 1) {
-                        fprintf(stderr,
-                                "matcher out of range: %d (a=%d b=%d c=%d d=%d)\n",
-                                m, a, b, c, d);
+                        fprintf(stderr, "matcher out of range: %d (a=%d b=%d c=%d d=%d)\n", m, a, b, c, d);
                         return 1;
                     }
                     if (r != GAVEL_DOWNLOAD && r != GAVEL_CONFLICT) {
-                        fprintf(stderr,
-                                "ladder out of range: %d (a=%d b=%d c=%d d=%d)\n",
-                                (int)r, a, b, c, d);
+                        fprintf(stderr, "ladder out of range: %d (a=%d b=%d c=%d d=%d)\n", (int)r, a, b, c, d);
                         return 1;
                     }
 
                     /* Matcher agrees with the oracle identity check. */
-                    int want_m = oracle_matches(local, server, last_sync,
-                                                last_sync_server);
+                    int want_m = oracle_matches(local, server, last_sync, last_sync_server);
                     if (m != want_m) {
                         fprintf(stderr,
                                 "matcher disagrees with oracle: got %d want %d "
@@ -95,8 +81,7 @@ int main(void) {
                     }
 
                     /* Invariant (iii): DOWNLOAD iff (L1 or parity or provenance). */
-                    gavel_resolution want_r = oracle_resolve(
-                        local, last_sync, server, last_sync_server);
+                    gavel_resolution want_r = oracle_resolve(local, last_sync, server, last_sync_server);
                     if (r != want_r) {
                         fprintf(stderr,
                                 "ladder disagrees with oracle: got %d want %d "

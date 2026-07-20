@@ -1,2 +1,34 @@
 [tools]
-zig = "0.14.1"
+zig = "0.14.1"   # local C compiler (`zig cc`, clang-based) — SteamOS ships no system cc; CI uses ubuntu's cc
+python = "3.12"  # runs the vector harnesses (pytest)
+uv = "0.10.2"    # creates the venv and installs pytest
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+
+[tasks.setup]
+description = "Install the test dependencies into the local venv"
+run = "uv pip install pytest"
+
+[tasks.build]
+description = "Build the core as a shared library (build/libgavel.so)"
+run = [
+    "mkdir -p build",
+    "zig cc -std=c99 -Wall -Wextra -Werror -pedantic -fPIC -shared -O2 core/gavel.c -o build/libgavel.so",
+]
+
+[tasks.test]
+description = "Run every conformance vector against the reference implementation and the C core"
+run = "env CC='zig cc' python -m pytest reference/tests core/tests -q"
+
+[tasks.sanitize]
+description = "Run the exhaustive C driver under ASan+UBSan"
+run = [
+    "mkdir -p build",
+    "zig cc -std=c99 -Wall -Wextra -Werror -pedantic -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all core/tests/exhaustive_driver.c core/gavel.c -o build/gavel_driver",
+    "./build/gavel_driver",
+]
+
+[tasks.validate]
+description = "Check every vector file's shape"
+run = "python scripts/validate_vectors.py"

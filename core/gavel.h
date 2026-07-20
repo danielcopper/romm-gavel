@@ -29,10 +29,7 @@ extern "C" {
  * GAVEL_CONFLICT — local carries changes AND the server independently moved.
  *   The safe default under uncertainty, surfaced for a user decision.
  */
-typedef enum {
-    GAVEL_DOWNLOAD = 0,
-    GAVEL_CONFLICT = 1
-} gavel_resolution;
+typedef enum { GAVEL_DOWNLOAD = 0, GAVEL_CONFLICT = 1 } gavel_resolution;
 
 /* Whether the present local file is byte-identical to a server save.
  *
@@ -54,9 +51,7 @@ typedef enum {
  *
  * Returns 1 when the local file matches a server save, 0 otherwise.
  */
-int gavel_local_matches_server(const char *local_hash,
-                               const char *server_content_hash,
-                               const char *last_sync_hash,
+int gavel_local_matches_server(const char *local_hash, const char *server_content_hash, const char *last_sync_hash,
                                const char *last_sync_server_hash);
 
 /* Decide the fallback after the server rejected an upload with 409.
@@ -76,10 +71,8 @@ int gavel_local_matches_server(const char *local_hash,
  * Missing or empty information never yields GAVEL_DOWNLOAD — the safe default
  * under uncertainty is GAVEL_CONFLICT.
  */
-gavel_resolution gavel_resolve_upload_conflict(const char *local_hash,
-                                               const char *last_sync_hash,
-                                               const char *server_content_hash,
-                                               const char *last_sync_server_hash);
+gavel_resolution gavel_resolve_upload_conflict(const char *local_hash, const char *last_sync_hash,
+                                               const char *server_content_hash, const char *last_sync_server_hash);
 
 #ifdef __cplusplus
 }

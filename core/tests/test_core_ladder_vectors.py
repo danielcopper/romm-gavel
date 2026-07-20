@@ -52,12 +52,13 @@ _ALPHABET = [None, "", "a" * 32, "b" * 32, "c" * 32, "d" * 32]
 def _compile_lib() -> ctypes.CDLL:
     """Compile the core to a shared object with ``$CC`` and load it via ctypes."""
     cc = shlex.split(os.environ.get("CC", "cc"))
-    tmpdir = tempfile.mkdtemp(prefix="gavel-core-")
-    so_path = Path(tmpdir) / "libgavel.so"
-    cmd = [*cc, *_CFLAGS, str(_CORE_DIR / "gavel.c"), "-o", str(so_path)]
-    subprocess.run(cmd, check=True)
-
-    lib = ctypes.CDLL(str(so_path))
+    with tempfile.TemporaryDirectory(prefix="gavel-core-") as tmpdir:
+        so_path = Path(tmpdir) / "libgavel.so"
+        cmd = [*cc, *_CFLAGS, str(_CORE_DIR / "gavel.c"), "-o", str(so_path)]
+        subprocess.run(cmd, check=True)
+        # Loading inside the with-block is fine: on Linux the mapping keeps the
+        # ELF alive after the file is deleted, so nothing leaks into /tmp.
+        lib = ctypes.CDLL(str(so_path))
     lib.gavel_resolve_upload_conflict.argtypes = [ctypes.c_char_p] * 4
     lib.gavel_resolve_upload_conflict.restype = ctypes.c_int
     lib.gavel_local_matches_server.argtypes = [ctypes.c_char_p] * 4
