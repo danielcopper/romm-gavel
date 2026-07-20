@@ -1,7 +1,7 @@
 {
   "pythonVersion": "3.12",
   "typeCheckingMode": "basic",
-  "extraPaths": ["reference"],
+  "extraPaths": ["reference", "bindings/python"],
   "exclude": [".venv", "build", ".claude"],
   "reportMissingModuleSource": "none",
   "reportMissingImports": "warning",

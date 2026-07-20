@@ -41,10 +41,10 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Run the native-core vectors + differential (system cc)
+      - name: Run the native-core and binding vectors + differentials (system cc)
         run: |
           pip install pytest
-          python -m pytest core/tests -q
+          python -m pytest core/tests bindings/python/tests -q
       - name: Compile and run the exhaustive driver under ASan/UBSan
         run: |
           cc -std=c99 -Wall -Wextra -Werror -pedantic -O1 -g \
