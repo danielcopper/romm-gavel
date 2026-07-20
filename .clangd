@@ -1,2 +1,4 @@
 CompileFlags:
-  Add: [-std=c99, -Wall, -Wextra, -pedantic]
+  # -xc pins the language to C — without a compile database clangd guesses the
+  # language of a bare header (Objective-C++!), which rejects -std=c99.
+  Add: [-xc, -std=c99, -Wall, -Wextra, -pedantic]
