@@ -2,8 +2,6 @@
   "pythonVersion": "3.12",
   "typeCheckingMode": "basic",
   "extraPaths": ["reference"],
-  "venvPath": ".",
-  "venv": ".venv",
   "exclude": [".venv", "build", ".claude"],
   "reportMissingModuleSource": "none",
   "reportMissingImports": "warning",
