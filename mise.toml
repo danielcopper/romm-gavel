@@ -18,8 +18,8 @@ run = [
 ]
 
 [tasks.test]
-description = "Run every conformance vector against the reference implementation and the C core"
-run = "env CC='zig cc' python -m pytest reference/tests core/tests -q"
+description = "Run every conformance vector against the reference, the C core, and the Python binding"
+run = "env CC='zig cc' python -m pytest reference/tests core/tests bindings/python/tests -q"
 
 [tasks.sanitize]
 description = "Run the exhaustive C driver under ASan+UBSan"
