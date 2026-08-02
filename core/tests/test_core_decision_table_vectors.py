@@ -256,3 +256,32 @@ def test_null_bookkeeping_decides_like_an_empty_record():
 
     assert with_null.action == with_empty.action == 0  # skip
     assert with_null.adopt_baseline == with_empty.adopt_baseline == 1
+
+
+@pytest.mark.parametrize(
+    ("device_id", "expected_action"),
+    [(None, 0), (b"device-a", 3)],  # matches the NULL entry → skip; no match → conflict
+)
+def test_absent_device_ids_match_each_other(device_id: bytes | None, expected_action: int):
+    """Device ids compare for plain equality, so two absent ids are the same id.
+
+    That mirrors the reference, where a missing ``device_id`` key on both sides
+    is ``None == None``. It is deliberately *not* the hash rule, where an
+    unknown value proves nothing — and no vector can express a NULL device id,
+    so this is the only thing pinning the distinction.
+    """
+    syncs = (DeviceSync * 1)()
+    syncs[0].device_id = None
+    syncs[0].is_current = 1
+    saves = (ServerSave * 1)()
+    saves[0].id = 101
+    saves[0].updated_at_epoch = 1780401600.0
+    saves[0].has_updated_at = 1
+    saves[0].content_hash = b"c" * 32
+    saves[0].device_syncs = ctypes.cast(syncs, ctypes.POINTER(DeviceSync))
+    saves[0].device_sync_count = 1
+    local_file = ctypes.pointer(LocalFile(size=8192, has_size=1, mtime=1780401600.0, has_mtime=1))
+
+    result = SyncAction()
+    _LIB.gavel_compute_sync_action(local_file, saves, 1, None, device_id, b"a" * 32, ctypes.byref(result))
+    assert result.action == expected_action

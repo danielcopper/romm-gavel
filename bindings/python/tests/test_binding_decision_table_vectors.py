@@ -96,15 +96,21 @@ _TIMESTAMPS = ["2026-06-01T12:00:00Z", "2026-06-02T12:00:00Z", "garbage", None]
 # fall-through path sees a local file that is older, exactly equal, and newer.
 _EQUAL_MTIME = 1780401600.0
 
-# Present-but-incomplete is a real shape (a file the client could not stat
-# fully); an empty dict is not, and the reference reads it inconsistently.
+# Presence is what decides, not shape: a file the client could only partly stat
+# still exists. The empty dict is in here on purpose — no vector can express it
+# (the shape validator requires a filename), so this differential is the only
+# thing pinning that ``{}`` reads as present rather than as absent.
 _LOCAL_FILES = [
     None,
+    {},
     {"filename": "game.srm"},
     {"filename": "game.srm", "size": 0, "mtime": _EQUAL_MTIME},
     {"filename": "game.srm", "size": 100, "mtime": _EQUAL_MTIME - 3600},
     {"filename": "game.srm", "size": 8192, "mtime": _EQUAL_MTIME},
     {"filename": "game.srm", "size": 8192, "mtime": _EQUAL_MTIME + 3600},
+    # Not a size any filesystem reports, but it is what the shrink guard's
+    # negative branch exists for.
+    {"filename": "game.srm", "size": -1, "mtime": _EQUAL_MTIME},
 ]
 
 _FILES_STATES = [
@@ -154,4 +160,6 @@ def test_binding_matches_python_reference_across_input_shapes():
         if got != want:
             mismatches.append((local_file, slot, files_state, local_hash, got, want))
     assert not mismatches, f"{len(mismatches)} of {checked} mismatched; first: {mismatches[0]}"
-    assert checked > 5000, f"differential shrank to {checked} combinations"
+    # Guards against a fixture list silently collapsing — the sweep is ~18k, so
+    # anything near this bound means an axis stopped contributing.
+    assert checked > 15_000, f"differential shrank to {checked} combinations"

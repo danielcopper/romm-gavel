@@ -105,18 +105,31 @@ class _SyncAction(ctypes.Structure):
     )
 
 
-def _optional_number(value: object) -> tuple[float, int]:
-    """A dict value → the core's ``(number, has_number)`` pair.
+def _optional_timestamp(value: object) -> tuple[float, int]:
+    """A dict value → the core's ``(epoch, has_epoch)`` pair.
 
     A number is present; anything else — an absent key, ``None``, a string —
-    reads as absent. That is the reference's ``isinstance(x, int | float)``
-    guard on ``mtime``, applied to every optional number: where the reference
-    would raise on a non-numeric size, the core is simply told it has none, and
-    the safe "cannot prove it" branch applies.
+    reads as absent, mirroring the reference's ``isinstance(x, int | float)``
+    guard on ``mtime``.
     """
     if isinstance(value, (int, float)):
         return float(value), 1
     return 0.0, 0
+
+
+def _optional_size(value: object, field: str) -> tuple[int, int]:
+    """A dict value → the core's ``(size, has_size)`` pair.
+
+    Sizes are whole numbers of bytes; the ABI carries them as ``int64_t``. A
+    value that is not integral cannot be represented, and quietly rounding it
+    would land on 0 — the one value the corrupt-local guard reacts to — so it
+    raises instead. Absent stays absent.
+    """
+    if value is None:
+        return 0, 0
+    if isinstance(value, int) or (isinstance(value, float) and value.is_integer()):
+        return int(value), 1
+    raise ValueError(f"{field} must be a whole number of bytes, got {value!r}")
 
 
 class GavelCore:
@@ -223,9 +236,9 @@ def _build_local_file(local_file: dict[str, Any] | None) -> Any:
     """
     if local_file is None:
         return None
-    size, has_size = _optional_number(local_file.get("size"))
-    mtime, has_mtime = _optional_number(local_file.get("mtime"))
-    return ctypes.pointer(_LocalFile(size=int(size), has_size=has_size, mtime=mtime, has_mtime=has_mtime))
+    size, has_size = _optional_size(local_file.get("size"), "local_file.size")
+    mtime, has_mtime = _optional_timestamp(local_file.get("mtime"))
+    return ctypes.pointer(_LocalFile(size=size, has_size=has_size, mtime=mtime, has_mtime=has_mtime))
 
 
 def _build_bookkeeping(files_state: dict[str, Any], keepalive: list[object]) -> Any:
@@ -239,12 +252,12 @@ def _build_bookkeeping(files_state: dict[str, Any], keepalive: list[object]) -> 
     last_sync_hash = _encode(files_state.get("last_sync_hash"))
     last_sync_server_hash = _encode(files_state.get("last_sync_server_hash"))
     keepalive += [last_sync_hash, last_sync_server_hash]
-    size, has_size = _optional_number(files_state.get("last_sync_local_size"))
+    size, has_size = _optional_size(files_state.get("last_sync_local_size"), "files_state.last_sync_local_size")
     return ctypes.pointer(
         _Bookkeeping(
             last_sync_hash=last_sync_hash,
             last_sync_server_hash=last_sync_server_hash,
-            last_sync_local_size=int(size),
+            last_sync_local_size=size,
             has_last_sync_local_size=has_size,
         )
     )

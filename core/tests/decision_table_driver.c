@@ -173,7 +173,7 @@ static gavel_sync_action oracle_decide(const gavel_local_file *local_file, const
  * The swept input space
  * ------------------------------------------------------------------------- */
 
-#define N_LOCAL_FILES 6
+#define N_LOCAL_FILES 7
 #define N_BOOKKEEPING 6
 #define N_HASHES 4
 #define N_TIMESTAMPS 4
@@ -215,6 +215,13 @@ static void init_fixtures(void) {
     LOCAL_FILES[5].has_size = 1;
     LOCAL_FILES[5].mtime = EQUAL_EPOCH + 3600.0;
     LOCAL_FILES[5].has_mtime = 1;
+    /* Nonsense from a caller, but it is the input the shrink guard's negative
+     * branch exists for — the branch that keeps INT64_MIN out of its
+     * subtraction. Without a fixture reaching it, the sanitizers never see it. */
+    LOCAL_FILES[6].size = -1;
+    LOCAL_FILES[6].has_size = 1;
+    LOCAL_FILES[6].mtime = EQUAL_EPOCH;
+    LOCAL_FILES[6].has_mtime = 1;
 
     /* index 0 is unused — the sweep passes NULL for "no record held". */
     BOOKKEEPING[1].last_sync_hash = NULL;

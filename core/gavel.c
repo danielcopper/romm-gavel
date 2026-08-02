@@ -67,10 +67,15 @@ gavel_resolution gavel_resolve_upload_conflict(const char *local_hash, const cha
  * The full sync decision
  * ------------------------------------------------------------------------- */
 
-/* Plain equality for opaque identifiers, NOT the hash rule above: an empty id
- * is a real value that equals another empty id, and two absent ids compare
- * equal (mirroring the reference, where a missing key on both sides is
- * ``None == None``). Only hashes get the "unknown proves nothing" treatment. */
+/* Plain byte equality, NULL-safe: an empty string is a real value that equals
+ * another empty string, and two absent values compare equal (mirroring the
+ * reference, where a missing key on both sides is ``None == None``).
+ *
+ * This is not gavel_truthy_equal. Whether an unknown value proves anything is a
+ * property of the *comparison*, not of the operands: device ids are compared
+ * for plain identity, and so is a local hash against its baseline — there the
+ * "unknown proves nothing" rule sits on the local hash alone, applied by the
+ * caller. Only the identity check itself is built from gavel_truthy_equal. */
 static int gavel_ids_equal(const char *a, const char *b) {
     if (a == NULL || b == NULL) {
         return a == b;

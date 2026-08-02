@@ -176,8 +176,10 @@ typedef enum { GAVEL_SKIP_SYNCED = 0, GAVEL_SKIP_NOTHING_TO_SYNC = 1 } gavel_ski
  *   GAVEL_ACTION_DOWNLOAD  → ``server_save_id``, always the chosen head
  *   GAVEL_ACTION_CONFLICT  → ``server_save_id``, always the chosen head
  *
- * Fields the action does not name are always zeroed, so the whole struct is
- * defined on every return and comparing two results never reads a stale byte. */
+ * Every field is written on every return: the ones the action names carry the
+ * decision, the rest are set to 0. Struct padding is not written and its
+ * contents are unspecified — compare two results field by field, never with
+ * memcmp. */
 typedef struct {
     gavel_action action;
     gavel_skip_reason reason;
