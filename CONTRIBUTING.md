@@ -9,13 +9,18 @@ artifact**. Prose explains, vectors decide — and implementations conform to ve
 it there) or the contract itself is being changed. Changing the contract is legitimate — but it happens deliberately, in
 a PR that says so, never as a test fix.
 
-What a vector change means for consumers, and therefore for versioning:
+What a change means for consumers, and therefore for versioning. Two surfaces are promised — the contract and the C ABI
+— and either breaking is a major (see [What a release promises](SPEC.md#what-a-release-promises)):
 
-| Change                                                         | Meaning                     | Version bump                                       |
-| -------------------------------------------------------------- | --------------------------- | -------------------------------------------------- |
-| An **existing** vector's `expected` value changes              | the contract itself changed | **major** — commit as `feat!:` / `BREAKING CHANGE` |
-| New vectors or a new family are added                          | the contract grew           | **minor** — `feat:`                                |
-| A vector's `name`/`rationale`, prose, tooling, reference, core | no contract change          | `docs:` / `chore:` / `ci:` / `fix:` as appropriate |
+| Change                                                          | Meaning                     | Version bump                                       |
+| --------------------------------------------------------------- | --------------------------- | -------------------------------------------------- |
+| An **existing** vector's `expected` value changes               | the contract itself changed | **major** — commit as `feat!:` / `BREAKING CHANGE` |
+| A promised struct layout, signature or enumerator value changes | the C ABI broke             | **major** — `feat!:` / `BREAKING CHANGE`           |
+| New vectors, a new family, or a new exported function           | the surface grew            | **minor** — `feat:`                                |
+| A vector's `name`/`rationale`, prose, tooling, reference        | no promised surface changed | `docs:` / `chore:` / `ci:` / `fix:` as appropriate |
+
+Adding a field to an existing struct belongs in the first two rows, not the third: it moves every field after it, so a
+consumer's compiled copy reads garbage even though nothing was removed.
 
 Clients vendor the vector files and pin a release — a changed `expected` value turns their CI red. That is the point
 (silent contract drift is what gavel exists to prevent), which is exactly why it must surface as a major version, not

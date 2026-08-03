@@ -1,7 +1,8 @@
 # gavel — save-sync decision spec
 
-Status: **draft**, extracted from decky-romm-sync `domain/sync_action.py` (`compute_sync_action` +
-`resolve_upload_conflict`).
+Status: **stable**. Extracted from decky-romm-sync `domain/sync_action.py` (`compute_sync_action` +
+`resolve_upload_conflict`), which now runs the compiled core instead. What a release promises, and what it does not, is
+[below](#what-a-release-promises).
 
 ## Scope
 
@@ -189,3 +190,29 @@ Releases version the repository as a whole, so a changed `expected` anywhere is 
 implementers of the family whose vector changed have to act. A client conformant with the ladder alone can take a major
 bump that asks nothing of it — which is why a client should record **which families** it conforms to, not just which
 gavel release it pinned.
+
+## What a release promises
+
+Two surfaces are covered, because both are things a client depends on and neither can change without breaking it. Either
+one changing incompatibly is a **major** release.
+
+**The contract.** Every vector's `expected` value, and the normative sections above: bookkeeping, the identity check,
+the ladder, overwrite discipline, and the invariants. Adding vectors or a family grows the contract without breaking it
+— that is a minor.
+
+**The C ABI** in [`core/gavel.h`](core/gavel.h), for clients that vendor the compiled core rather than implement the
+contract themselves:
+
+- the layout of `gavel_device_sync`, `gavel_server_save`, `gavel_local_file`, `gavel_bookkeeping` and
+  `gavel_sync_action` — field order and types,
+- the signatures of `gavel_local_matches_server`, `gavel_resolve_upload_conflict` and `gavel_compute_sync_action`,
+- the enumerator values of `gavel_action` and `gavel_skip_reason`,
+- the input conventions the header states: arrays as pointer plus count, optional numbers as a value plus an explicit
+  `has_*` flag, timestamps as epoch seconds plus a known-flag, and presence of the local file carried by the pointer.
+
+Adding an exported function is a minor. Adding a field to an existing struct is not — it moves the fields after it, so
+it is a major even though nothing was removed.
+
+**Not promised**, and free to change in any release: the pure-Python reference under `reference/` (it exists so the
+vectors have a first consumer, not as an API), the internals of `bindings/python/`, the test harnesses, and the build
+tooling.
