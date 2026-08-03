@@ -11,9 +11,9 @@ implementation.
 
 ## Testing your implementation
 
-1. **Copy the JSON files of the family you want to conform to into your repo** — today there is one family, so that
-   means the two files in `vectors/ladder/`. Copying is recommended over fetching at test time: no network in CI, and a
-   vector update shows up as a reviewable diff on your side. Note the gavel commit you copied at, so updates are
+1. **Copy the JSON files of the family you want to conform to into your repo** — the two files in `vectors/ladder/`, the
+   one in `vectors/decision-table/`, or both. Copying is recommended over fetching at test time: no network in CI, and a
+   vector update shows up as a reviewable diff on your side. Note the gavel release tag you copied at, so updates are
    deliberate.
 2. **Write a small adapter** from the vector input to your function. Your code probably doesn't take four loose hash
    parameters but the objects it already passes around internally — the adapter is just the repackaging: extract the
@@ -46,9 +46,15 @@ Two traps:
 - **Hash strings are opaque placeholders.** Only presence and equality carry meaning — never length-check, parse, or
   recompute them.
 
-Worked examples: `reference/tests/test_ladder_vectors.py` in this repo (the reference runner, ~40 lines), and
-decky-romm-sync's `tests/domain/test_sync_action_gavel_vectors.py` with its `tests/domain/gavel_vectors/README.md` (the
-vendoring pattern in a real client).
+Worked examples: `reference/tests/test_ladder_vectors.py` in this repo (the reference runner, ~40 lines) and
+`core/tests/test_core_decision_table_vectors.py` (the same for the richer family, including how the nested input objects
+map onto the C ABI); decky-romm-sync's `tests/domain/test_sync_action_gavel_vectors.py` with its
+`tests/domain/gavel_vectors/README.md` (the vendoring pattern in a real client).
+
+**If you'd rather not implement it at all**, `core/` is the same contract compiled: a freestanding C ABI with a Python
+binding over it, running every vector in this directory in CI. Releases carry an x86_64-linux build with a published
+checksum — pin both and re-verify on your side. Check that the release you pin exports the family you need; the core
+grew the decision table one release after the ladder.
 
 ## `ladder/` — the 409 resolution ladder
 

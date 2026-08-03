@@ -28,13 +28,19 @@ contract — saves today, save states as the natural next consumer.
    server-stamped hash), the 409/conflict resolution ladder, overwrite discipline, and the safety invariants
    (uncertainty never counts as a match; never destroy the only copy; a corrupt or implausibly shrunken local never
    auto-uploads; force-overwrite only on an explicit user choice).
-2. **`vectors/`** — language-neutral JSON conformance vectors, starting with the 409/conflict resolution ladder
-   (`input → expected action`). Any implementation in any language can run them and prove it decides the same way —
-   [`vectors/README.md`](vectors/README.md) has the how-to for pointing your own implementation at them.
+2. **`vectors/`** — language-neutral JSON conformance vectors: the 409/conflict resolution ladder and the full sync
+   decision (`input → expected action`). Any implementation in any language can run them and prove it decides the same
+   way — [`vectors/README.md`](vectors/README.md) has the how-to for pointing your own implementation at them.
 3. **`reference/`** — a pure-Python reference implementation, extracted from decky-romm-sync's production kernel.
-4. **Planned: a native core** with a C ABI plus per-language bindings (sigil-style), for clients that want a drop-in
-   instead of maintaining their own implementation. Spec and vectors come first — they define what the core must do and
-   prove it does it.
+4. **`core/`** — a native C99 core behind a C ABI, for clients that want a drop-in instead of maintaining their own
+   implementation: the identity check, the ladder, and the full sync decision. Allocation-free and _freestanding_ — the
+   compiled library imports nothing at all, not even libc, so it loads on any x86_64 Linux whatever the distro ships.
+   Releases carry `libgavel-x86_64-linux.so` and its `.sha256`.
+5. **`bindings/python/`** — the official Python binding: a ctypes wrapper over the core, mirroring the reference's
+   signatures so a consumer swaps one import for the other.
+
+Spec and vectors came first on purpose — they define what the core must do and prove it does it, rather than the core
+becoming the de-facto contract.
 
 ## What does not live here
 
@@ -51,13 +57,26 @@ server-side and this repo shrinks accordingly. That is the goal, not a failure m
 client obligation precisely enough that upstreaming it is easy. Until then, three shipped clients resolving the same
 slot state differently is the problem this solves.
 
+## Contributing
+
+[`CONTRIBUTING.md`](CONTRIBUTING.md) carries the one rule everything else derives from — **never edit a vector to make
+an implementation pass** — plus what a vector change means for versioning (a changed `expected` is a major bump, by
+design) and how to consume a release as a client author.
+
 ## Status
 
-Early, but both planned vector families exist. The 409 resolution ladder is extracted end-to-end: normative spec
-sections (bookkeeping, identity check, ladder, overwrite discipline), a curated plus exhaustive vector set under
-`vectors/ladder/`, and the reference implementation running every vector in CI. The decision-table family
+Both vector families exist and the contract is implemented twice over.
+
+The 409 resolution ladder is extracted end-to-end: normative spec sections (bookkeeping, identity check, ladder,
+overwrite discipline) and a curated plus exhaustive vector set under `vectors/ladder/`. The decision-table family
 (`vectors/decision-table/`) covers the full informative decision model the same way — including the provenance identity
-route the ladder vectors can't reach. The rules come from a production implementation
+route the ladder vectors can't reach.
+
+Every vector runs against the Python reference, the native core, and the Python binding on each PR, alongside
+differentials between them and sanitizer sweeps over the C. The rules come from a production implementation
 ([decky-romm-sync](https://github.com/danielcopper/decky-romm-sync)) that has been through a fair number of real
 conflict edge cases: baseline drift vs byte-identical restores, corrupt/truncated locals, both-sides-moved divergence,
-and stale-snapshot upload races.
+and stale-snapshot upload races — and that now resolves its 409s through the compiled core, with no Python fallback.
+
+Not here yet: bindings beyond Python, and release artifacts beyond x86_64 Linux. Both are tracked as open issues, and
+both are waiting on a consumer rather than on the work — a binding nobody adopts is speculation.
