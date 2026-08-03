@@ -68,6 +68,13 @@ jobs:
             -fsanitize=address,undefined -fno-sanitize-recover=all \
             core/tests/exhaustive_driver.c core/gavel.c -o gavel_driver
           ./gavel_driver
+
+      - name: Compile and run the decision-table driver under ASan/UBSan
+        run: |
+          cc -std=c99 -Wall -Wextra -Werror -pedantic -O1 -g \
+            -fsanitize=address,undefined -fno-sanitize-recover=all \
+            core/tests/decision_table_driver.c core/gavel.c -o gavel_table_driver
+          ./gavel_table_driver
       - name: Guard the core stays freestanding (zero dependencies)
         # Same guard the release pipeline enforces on the shipped artifact —
         # here so a PR that reintroduces a libc import fails before merge.

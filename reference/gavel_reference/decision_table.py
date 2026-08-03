@@ -141,7 +141,10 @@ def compute_sync_action(
 ) -> dict[str, Any]:
     """Compute the sync decision for a single (rom, filename, slot) triple."""
     if not server_saves_in_slot:
-        if local_file:
+        # ``is not None``, not truthiness: presence is what the rest of the
+        # module tests, and an object that exists but carries no fields is still
+        # a local file.
+        if local_file is not None:
             return _upload(None)
         return _skip("nothing_to_sync")
 
