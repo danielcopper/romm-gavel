@@ -10,3 +10,7 @@ __pycache__/
 *.o
 *.out
 build/
+
+# Coverage report for the SonarQube Cloud scan
+coverage.xml
+.coverage
