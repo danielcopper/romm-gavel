@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0](https://github.com/danielcopper/romm-gavel/compare/v0.4.0...v1.0.0) (2026-08-03)
+
+
+### Features
+
+* declare the contract and the C ABI stable ([#28](https://github.com/danielcopper/romm-gavel/issues/28)) ([ef6b8b5](https://github.com/danielcopper/romm-gavel/commit/ef6b8b580c99665db1177f8c1d582a503afccdfa))
+
 ## [0.4.0](https://github.com/danielcopper/romm-gavel/compare/v0.3.0...v0.4.0) (2026-08-03)
 
 
