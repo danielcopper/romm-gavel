@@ -26,6 +26,24 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 VECTOR_GLOB = "vectors/*/*.json"
 TITLE_BANG = re.compile(r"^[a-z]+(\([^)]*\))?!:")
+# What a git ref may look like here: the characters branches, tags and remote
+# refs actually use. Deliberately narrow — see _checked_ref.
+REF_PATTERN = re.compile(r"[A-Za-z0-9._/-]+")
+
+
+def _checked_ref(ref: str) -> str:
+    """Return *ref* if it is a plausible git ref, else abort.
+
+    The ref reaches this script from the command line, and CI passes whatever
+    ``github.base_ref`` holds. Nothing here goes through a shell, so this is not
+    about shell metacharacters — it is about *argument* injection: git reads a
+    leading ``-`` as an option, so an argument like ``--upload-pack=…`` would be
+    a flag rather than a ref. Refusing anything that is not ref-shaped closes
+    that without needing to know which flags each git subcommand accepts.
+    """
+    if ref.startswith("-") or not REF_PATTERN.fullmatch(ref):
+        sys.exit(f"refusing to use {ref!r} as a git ref")
+    return ref
 
 
 def _git(*args: str) -> str:
@@ -76,7 +94,7 @@ def find_breaking_changes(base_ref: str) -> list[str]:
 
 
 def main() -> None:
-    base_ref = sys.argv[1] if len(sys.argv) > 1 else "origin/main"
+    base_ref = _checked_ref(sys.argv[1]) if len(sys.argv) > 1 else "origin/main"
     merge_base = _git("merge-base", base_ref, "HEAD").strip()
     findings = find_breaking_changes(merge_base)
 

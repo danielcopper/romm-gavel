@@ -30,6 +30,8 @@ TABLE_INPUT_FIELDS = {
     "local_hash",
 }
 TABLE_FILES_STATE_FIELDS = {"last_sync_hash", "last_sync_server_hash", "last_sync_local_size"}
+# The decision-table actions. Kept in step with TABLE_EXPECTED_SHAPES below by
+# construction — see the assertion next to it.
 TABLE_ACTIONS = {"skip", "upload", "download", "conflict"}
 
 
@@ -93,25 +95,45 @@ def _validate_server_saves(name: str, saves: Any) -> None:
                 fail(f"{name}: device_syncs entries must be {{device_id: string, is_current: bool}}")
 
 
+def _check_skip_fields(name: str, expected: dict[str, Any]) -> None:
+    if not isinstance(expected["reason"], str) or not isinstance(expected["adopt_baseline"], bool):
+        fail(f"{name}: skip reason must be a string, adopt_baseline a bool")
+
+
+def _check_upload_fields(name: str, expected: dict[str, Any]) -> None:
+    target_save_id = expected["target_save_id"]
+    if target_save_id is not None and not isinstance(target_save_id, int):
+        fail(f"{name}: upload target_save_id must be an integer or null")
+
+
+def _check_server_save_fields(name: str, expected: dict[str, Any]) -> None:
+    if not isinstance(expected["server_save_id"], int):
+        fail(f"{name}: {expected['action']} server_save_id must be an integer")
+
+
+# action → (the exact key set it must carry, the check for those keys' values).
+# The tagged shapes of the decision-table dialect, one row each, so a new action
+# is a row rather than another branch.
+TABLE_EXPECTED_SHAPES = {
+    "skip": ({"action", "reason", "adopt_baseline"}, _check_skip_fields),
+    "upload": ({"action", "target_save_id"}, _check_upload_fields),
+    "download": ({"action", "server_save_id"}, _check_server_save_fields),
+    "conflict": ({"action", "server_save_id"}, _check_server_save_fields),
+}
+
+# An action accepted above but missing here would raise KeyError on a real
+# vector instead of failing with a shape message; keep the two in step.
+assert set(TABLE_EXPECTED_SHAPES) == TABLE_ACTIONS
+
+
 def _validate_table_expected(name: str, expected: Any) -> None:
     if not isinstance(expected, dict) or expected.get("action") not in TABLE_ACTIONS:
         fail(f"{name}: expected.action must be one of {sorted(TABLE_ACTIONS)}")
     action = expected["action"]
-    if action == "skip":
-        if set(expected) != {"action", "reason", "adopt_baseline"}:
-            fail(f"{name}: skip expects exactly action/reason/adopt_baseline")
-        if not isinstance(expected["reason"], str) or not isinstance(expected["adopt_baseline"], bool):
-            fail(f"{name}: skip reason must be a string, adopt_baseline a bool")
-    elif action == "upload":
-        if set(expected) != {"action", "target_save_id"}:
-            fail(f"{name}: upload expects exactly action/target_save_id")
-        if expected["target_save_id"] is not None and not isinstance(expected["target_save_id"], int):
-            fail(f"{name}: upload target_save_id must be an integer or null")
-    else:
-        if set(expected) != {"action", "server_save_id"}:
-            fail(f"{name}: {action} expects exactly action/server_save_id")
-        if not isinstance(expected["server_save_id"], int):
-            fail(f"{name}: {action} server_save_id must be an integer")
+    fields, check_values = TABLE_EXPECTED_SHAPES[action]
+    if set(expected) != fields:
+        fail(f"{name}: {action} expects exactly {'/'.join(sorted(fields))}")
+    check_values(name, expected)
 
 
 def validate_table_vector(vector: dict[str, Any]) -> None:
