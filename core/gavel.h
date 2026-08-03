@@ -133,7 +133,13 @@ typedef struct {
  * ``size`` backs the corrupt-local guard (invariant I3) and ``mtime`` (epoch
  * seconds) the timestamp fall-through; each is optional. The filename is not a
  * field: it addresses which slot is being decided, and the decision itself
- * never reads it. */
+ * never reads it.
+ *
+ * Presence is carried by the pointer alone, never by the flags: a struct with
+ * both ``has_size`` and ``has_mtime`` clear is a file that exists and could not
+ * be measured, not a missing one. That is what SPEC.md requires of every
+ * representation, and NULL-vs-pointer is how this ABI keeps the question
+ * two-valued. */
 typedef struct {
     int64_t size;
     int has_size;

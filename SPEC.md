@@ -88,6 +88,16 @@ Missing or empty information never yields **download** — the safe default unde
 | `local_hash`           | content hash of the local file, or unknown                                                               | client (RomM-parity scheme, zip-aware) |
 | bookkeeping record     | `last_sync_hash`, `last_sync_server_hash`, `last_sync_local_size`, or absent                             | client-held state (see Bookkeeping)    |
 
+**`local_file` presence is the existence of the file, not what is known about it** (normative). Absent means there is no
+local file at all; anything else is a present file, including one whose `size` or `mtime` the client could not read.
+Presence is a two-valued question and implementations must keep it that way — a representation that lets "present"
+degrade into "absent" once the fields are missing will answer the same state two different ways in different branches.
+Getting it wrong is not symmetric: reading a present file as absent can leave the only copy unbacked in silence, while
+reading an absent one as present fails loudly in the client's own file I/O.
+
+Individual field values stay optional and unknown-tolerant as the decision table describes — an unknown `size` merely
+means the corrupt-local guard cannot fire, not that the file is gone.
+
 ## Decision table (informative)
 
 The reference client's full model — one decision per `(rom, filename, slot)`:
