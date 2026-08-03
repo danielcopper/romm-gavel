@@ -203,10 +203,9 @@ class GavelCore:
         ISO-8601 ``updated_at``; the result speaks the vector dialect), so this
         is a drop-in swap for ``gavel_reference.compute_sync_action``.
         """
-        # Every buffer the C structs point at must outlive the call. ctypes
-        # keeps its own references, but an explicit list removes the question:
-        # each encoded string and each array is reachable from here until
-        # gavel_compute_sync_action has returned.
+        # Every buffer the C structs point at must outlive the call. Holding
+        # each encoded string and each array here is what guarantees that; see
+        # _build_saves for why CPython's own bookkeeping is not relied on.
         keepalive: list[object] = []
 
         c_local_file = _build_local_file(local_file)
@@ -267,9 +266,12 @@ def _build_saves(server_saves_in_slot: list[dict[str, Any]], keepalive: list[obj
     """The slot's server saves as one contiguous array, or NULL when empty.
 
     Each save's ``device_syncs`` gets its own array; both those arrays and every
-    encoded string go into ``keepalive``, because assigning through an array
-    element writes a raw pointer into the struct and the object behind it has to
-    survive until the call returns.
+    encoded string go into ``keepalive`` so the buffers the C structs point at
+    stay reachable for the duration of the call. CPython does record these
+    itself — a value assigned to a pointer field lands in the container's
+    ``_objects``, including through an array element — but that is one
+    interpreter's implementation detail, not a documented guarantee, so this
+    binding does not lean on it.
     """
     if not server_saves_in_slot:
         return None, 0
