@@ -76,7 +76,7 @@ Every vector runs against the Python reference, the native core, and the Python 
 differentials between them and sanitizer sweeps over the C. The rules come from a production implementation
 ([decky-romm-sync](https://github.com/danielcopper/decky-romm-sync)) that has been through a fair number of real
 conflict edge cases: baseline drift vs byte-identical restores, corrupt/truncated locals, both-sides-moved divergence,
-and stale-snapshot upload races — and that now ships the compiled core as its 409 resolution kernel, with no fallback.
+and stale-snapshot upload races — and that now resolves its 409s through the compiled core, with no Python fallback.
 
 Not here yet: bindings beyond Python, and release artifacts beyond x86_64 Linux. Both are tracked as open issues, and
 both are waiting on a consumer rather than on the work — a binding nobody adopts is speculation.

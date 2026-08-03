@@ -52,8 +52,9 @@ map onto the C ABI); decky-romm-sync's `tests/domain/test_sync_action_gavel_vect
 `tests/domain/gavel_vectors/README.md` (the vendoring pattern in a real client).
 
 **If you'd rather not implement it at all**, `core/` is the same contract compiled: a freestanding C ABI with a Python
-binding over it, running these vectors in CI. Vendor the released `.so` against its published checksum and the
-conformance question stops being yours.
+binding over it, running every vector in this directory in CI. Releases carry an x86_64-linux build with a published
+checksum — pin both and re-verify on your side. Check that the release you pin exports the family you need; the core
+grew the decision table one release after the ladder.
 
 ## `ladder/` — the 409 resolution ladder
 
