@@ -13,7 +13,10 @@ must be surfaced, never picks the winner.
 
 The full per-`(rom, filename, slot)` decision table below is **informative**: it documents the reference client's model,
 which keeps detection client-side by choice. Clients that consume negotiate's verdicts directly still need the normative
-parts — the bookkeeping and the ladder are exactly where shipped clients diverge today.
+parts — the bookkeeping and the ladder are exactly where shipped clients diverge today. Informative means "not required
+of every client", not "not pinned": a client that does compute detection itself is held to
+[`vectors/decision-table/`](vectors/decision-table/) exactly as tightly as to the ladder. See
+[Conformance](#conformance).
 
 ## Bookkeeping (normative)
 
@@ -158,9 +161,23 @@ Notes:
 
 ## Conformance
 
-An implementation is conformant when it produces the expected action for every vector in `vectors/`. Vectors are the
+Conformance is **per family**. An implementation is conformant with a vector family when it produces the expected action
+for every vector in that family, and claims the families it implements rather than all of them. Vectors are the
 normative artifact; prose explains, vectors decide.
 
-Current coverage: the 409 resolution ladder (`vectors/ladder/` — a curated named set plus the exhaustive
-equivalence-class set over the four hash inputs) and the decision table (`vectors/decision-table/` — curated named cases
-across every branch and row above, including both identity routes and the timestamp fall-through).
+Which families apply depends on where the client sits:
+
+- **`vectors/ladder/`** — the 409 resolution ladder. Applies to every client that uploads, because every client
+  eventually meets a 409. A curated named set plus the exhaustive equivalence-class set over the four hash inputs.
+- **`vectors/decision-table/`** — the full per-`(rom, filename, slot)` decision. Applies to clients that compute
+  detection themselves; a client consuming negotiate's verdicts directly has no use for it. Curated named cases across
+  every branch and row of the table above, including both identity routes and the timestamp fall-through.
+
+"Informative" above means exactly this — not required of every client. It does not mean optional to get right: where a
+family applies, its vectors decide, and there is no weaker standard for one family than another.
+
+Releases version the repository as a whole, so a changed `expected` anywhere is a major release (see
+[`CONTRIBUTING.md`](CONTRIBUTING.md)). The obligation it creates is narrower than the version number suggests: only
+implementers of the family whose vector changed have to act. A client conformant with the ladder alone can take a major
+bump that asks nothing of it — which is why a client should record **which families** it conforms to, not just which
+gavel release it pinned.
