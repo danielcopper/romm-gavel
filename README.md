@@ -19,8 +19,11 @@ client touches it.
 gavel writes that delegated layer down. [sigil](https://github.com/rommforge/argosy-sigil) answers _"which game is this
 and what will its save be called"_ — gavel answers what a client does in the space the server hands back.
 
-The rules are not save-specific either: anything RomM syncs as a local-file-vs-server-version pair gets the same
-contract — saves today, save states as the natural next consumer.
+The rules are not save-specific in principle — they compare content hashes, not file meaning. In practice they cover
+saves and only saves, because that is what RomM stamps: a save carries a server `content_hash`, a slot and a per-device
+sync record, and a save state carries none of the three. Without them the identity check has nothing on the server side
+to compare against, so save states become a consumer when the server gives them the same treatment, not before
+([#20](https://github.com/danielcopper/romm-gavel/issues/20)).
 
 ## What lives here
 
