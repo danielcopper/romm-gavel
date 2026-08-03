@@ -163,3 +163,24 @@ def test_binding_matches_python_reference_across_input_shapes():
     # Guards against a fixture list silently collapsing — the sweep is ~18k, so
     # anything near this bound means an axis stopped contributing.
     assert checked > 15_000, f"differential shrank to {checked} combinations"
+
+
+@pytest.mark.parametrize("field", ["local_file", "files_state"])
+def test_a_non_integral_size_is_refused(field: str):
+    """Sizes are whole bytes, and rounding one would land on the loaded value.
+
+    The ABI carries a size as ``int64_t``. Quietly truncating 0.5 gives 0 —
+    exactly what the corrupt-local guard reacts to — so an unrepresentable size
+    raises rather than answering a different question. No vector can reach this
+    (the shape validator requires an integer size), which is why it is pinned
+    here.
+    """
+    local_file: dict[str, Any] = {"filename": "game.srm", "size": 8192, "mtime": _EQUAL_MTIME}
+    files_state: dict[str, Any] = {}
+    if field == "local_file":
+        local_file["size"] = 1.5
+    else:
+        files_state["last_sync_local_size"] = 1.5
+
+    with pytest.raises(ValueError, match="whole number of bytes"):
+        _CORE.compute_sync_action(local_file, [], files_state, _DEVICE_ID, "a" * 32)

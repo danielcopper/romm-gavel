@@ -90,3 +90,61 @@ jobs:
             echo "ERROR: library has global undefined symbols"
             exit 1
           fi
+
+  sonarcloud:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # SONAR_TOKEN does not reach Dependabot or forked-PR runs, so the scan can
+    # only fail there. Skipped rather than failed; `sonar-gate` below is what
+    # branch protection requires.
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Sonar needs full history to attribute new code to the right commits.
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Produce Python coverage
+        # Run here rather than shipping an artifact between jobs: the whole
+        # suite is ~1.5s, so a second run costs less than the plumbing would.
+        run: |
+          pip install pytest pytest-cov
+          python -m pytest reference/tests core/tests bindings/python/tests \
+            --cov=reference/gavel_reference --cov=bindings/python/gavel_native \
+            --cov-report=xml -q
+
+      - name: SonarQube Cloud scan
+        # C is analysed in AutoConfig mode — the CI default, no build wrapper
+        # and no compilation database. The scanner waits on the quality gate
+        # (sonar.qualitygate.wait) and exits non-zero when it fails, so this
+        # job's own result is the verdict.
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # Branch-protection shim: `sonarcloud` is skipped on Dependabot and forked
+  # PRs, and a skipped required check never reports success — which would
+  # deadlock exactly those PRs. This job always reports: it passes when the scan
+  # succeeded or was skipped, and fails only when the scan failed. Make THIS the
+  # required status check, not `sonarcloud`.
+  sonar-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [sonarcloud]
+    if: always()
+    steps:
+      - name: Require the scan to pass (skipped on Dependabot / forked PRs)
+        env:
+          SONAR_RESULT: ${{ needs.sonarcloud.result }}
+        run: |
+          echo "sonarcloud job result: $SONAR_RESULT"
+          if [ "$SONAR_RESULT" = "failure" ] || [ "$SONAR_RESULT" = "cancelled" ]; then
+            echo "::error::SonarQube Cloud did not pass"
+            exit 1
+          fi
