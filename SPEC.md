@@ -18,6 +18,14 @@ of every client", not "not pinned": a client that does compute detection itself 
 [`vectors/decision-table/`](vectors/decision-table/) exactly as tightly as to the ladder. See
 [Conformance](#conformance).
 
+**Which assets this covers.** The contract's inputs are a server-stamped `content_hash`, a per-device sync record and a
+slot. RomM gives saves all three and save states none of them, and its sync endpoints do not cover states at all — so
+this contract covers saves. Nothing in the rules is save-specific; they compare content hashes and never look at what a
+file means. But an asset the server does not stamp cannot be decided by them: both routes of the identity check lose
+their server-side operand, no `device_syncs` entry exists to branch on, and every decision falls through to the
+timestamp comparison — the weakest path in the table, as the only path. Extending the contract to another asset type is
+therefore a server question before it is a spec one.
+
 ## Bookkeeping (normative)
 
 At each **successful sync boundary** — an upload the server acknowledged, a completed download, or an explicit baseline
