@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/danielcopper/romm-gavel/compare/v0.3.0...v0.4.0) (2026-08-03)
+
+
+### Features
+
+* extend the native core to the full sync decision ([#21](https://github.com/danielcopper/romm-gavel/issues/21)) ([f477794](https://github.com/danielcopper/romm-gavel/commit/f477794b3a66f868377665d0fa205274bd4ac4b3)), closes [#5](https://github.com/danielcopper/romm-gavel/issues/5)
+
 ## [0.3.0](https://github.com/danielcopper/romm-gavel/compare/v0.2.0...v0.3.0) (2026-07-20)
 
 
