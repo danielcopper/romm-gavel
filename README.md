@@ -1,5 +1,12 @@
 # romm-gavel
 
+[![CI](https://github.com/danielcopper/romm-gavel/actions/workflows/ci.yml/badge.svg)](https://github.com/danielcopper/romm-gavel/actions/workflows/ci.yml)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=danielcopper_romm-gavel&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=danielcopper_romm-gavel)
+[![Security](https://sonarcloud.io/api/project_badges/measure?project=danielcopper_romm-gavel&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=danielcopper_romm-gavel)
+[![Reliability](https://sonarcloud.io/api/project_badges/measure?project=danielcopper_romm-gavel&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=danielcopper_romm-gavel)
+[![Maintainability](https://sonarcloud.io/api/project_badges/measure?project=danielcopper_romm-gavel&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=danielcopper_romm-gavel)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=danielcopper_romm-gavel&metric=coverage)](https://sonarcloud.io/summary/new_code?id=danielcopper_romm-gavel)
+
 The client companion contract for RomM Device Sync — the layer the server hands to clients, written down as a spec
 instead of re-guessed per client.
 
