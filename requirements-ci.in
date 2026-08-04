@@ -1,0 +1,5 @@
+# Direct CI/test tooling. Exact, fully resolved pins live in requirements-ci.txt;
+# regenerate it with `mise run lock-update` after editing this file.
+basedpyright
+pytest
+pytest-cov

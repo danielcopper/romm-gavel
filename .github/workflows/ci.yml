@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.x
       - name: Check markdown formatting
@@ -40,16 +40,14 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: Install pinned tooling
+        run: "pip install --only-binary :all: -r requirements-ci.txt"
       - name: Validate vector file shape
         run: python scripts/validate_vectors.py
       - name: Run vectors against the reference implementation
-        run: |
-          pip install pytest
-          python -m pytest reference/tests -q
+        run: python -m pytest reference/tests -q
       - name: Type-check (basedpyright)
-        run: |
-          pip install basedpyright
-          basedpyright
+        run: basedpyright
 
   core:
     runs-on: ubuntu-latest
@@ -58,10 +56,10 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: Install pinned tooling
+        run: "pip install --only-binary :all: -r requirements-ci.txt"
       - name: Run the native-core and binding vectors + differentials (system cc)
-        run: |
-          pip install pytest
-          python -m pytest core/tests bindings/python/tests -q
+        run: python -m pytest core/tests bindings/python/tests -q
       - name: Compile and run the exhaustive driver under ASan/UBSan
         run: |
           cc -std=c99 -Wall -Wextra -Werror -pedantic -O1 -g \
@@ -114,7 +112,7 @@ jobs:
         # Run here rather than shipping an artifact between jobs: the whole
         # suite is ~1.5s, so a second run costs less than the plumbing would.
         run: |
-          pip install pytest pytest-cov
+          pip install --only-binary :all: -r requirements-ci.txt
           python -m pytest reference/tests core/tests bindings/python/tests \
             --cov=reference/gavel_reference --cov=bindings/python/gavel_native \
             --cov-report=xml -q

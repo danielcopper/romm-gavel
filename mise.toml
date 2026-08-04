@@ -7,8 +7,12 @@ uv = "0.10.2"    # creates the venv and installs pytest
 _.python.venv = { path = ".venv", create = true }
 
 [tasks.setup]
-description = "Install the test dependencies into the local venv"
-run = "uv pip install pytest"
+description = "Install the pinned test dependencies into the local venv"
+run = "uv pip install --only-binary :all: -r requirements-ci.txt"
+
+[tasks.lock-update]
+description = "Recompile requirements-ci.txt from requirements-ci.in (run after editing the sources)"
+run = "uv pip compile requirements-ci.in -o requirements-ci.txt"
 
 [tasks.build]
 description = "Build the core as a shared library (build/libgavel.so)"
