@@ -1,15 +1,16 @@
-"""Compile the native core and run the ladder vectors + a differential cross-check.
+"""Compile the native core and run the ladder vectors against its C ABI.
 
-The C library must be behaviorally identical to the Python reference and pass the
-same conformance vectors. This harness compiles ``core/gavel.c`` to a shared
-object with the compiler named by ``$CC`` (default ``cc``; may contain spaces,
-e.g. ``zig cc``), loads it via ctypes, and drives the two public functions.
+The vectors are the contract, so this harness answers one question: does the
+compiled library produce ``expected`` for every one of them? It compiles
+``core/gavel.c`` to a shared object with the compiler named by ``$CC`` (default
+``cc``; may contain spaces, e.g. ``zig cc``), loads it via ctypes, and drives the
+two public functions.
 
-Two tiers:
-  - every ladder vector in ``vectors/ladder/*.json`` against
-    ``gavel_resolve_upload_conflict`` — the normative conformance run;
-  - a differential over all 1296 canonical hash combinations against the Python
-    reference, so the C port and the reference can never silently drift.
+Conformance only: every ladder vector in ``vectors/ladder/*.json`` against
+``gavel_resolve_upload_conflict``. Breadth over the whole input space belongs to
+``exhaustive_driver.c``, which walks all 1296 combinations against its own
+oracle under sanitizers — this harness proves the ABI answers the contract, not
+that it agrees with some other implementation.
 """
 
 from __future__ import annotations
@@ -19,9 +20,7 @@ import json
 import os
 import shlex
 import subprocess
-import sys
 import tempfile
-from itertools import product
 from pathlib import Path
 
 import pytest
@@ -43,10 +42,6 @@ _CFLAGS = [
 ]
 
 _RESOLUTION = {0: "download", 1: "conflict"}
-
-# Canonical inputs for the differential: unknown (NULL), empty, and four
-# distinct 32-char hashes — the same alphabet the exhaustive C driver walks.
-_ALPHABET = [None, "", "a" * 32, "b" * 32, "c" * 32, "d" * 32]
 
 
 def _compile_lib() -> ctypes.CDLL:
@@ -97,42 +92,3 @@ def test_ladder_vector(vector):
         _encode(i["last_sync_server_hash"]),
     )
     assert _RESOLUTION[got] == vector["expected"], vector.get("rationale", vector["name"])
-
-
-def _load_reference():
-    """Import the Python reference, adding then removing ``reference/`` from the path."""
-    ref_path = str(_REPO_ROOT / "reference")
-    sys.path.insert(0, ref_path)
-    try:
-        from gavel_reference import local_matches_server, resolve_upload_conflict
-    finally:
-        sys.path.remove(ref_path)
-    return resolve_upload_conflict, local_matches_server
-
-
-def test_c_matches_python_reference_exhaustively():
-    """Differential: the C port agrees with the Python reference on all 1296 combos."""
-    resolve_ref, matches_ref = _load_reference()
-    mismatches = []
-    for local, last_sync, server, last_sync_server in product(_ALPHABET, repeat=4):
-        # Ladder — arg order (local, last_sync, server, last_sync_server).
-        c_resolve = _RESOLUTION[
-            _LIB.gavel_resolve_upload_conflict(
-                _encode(local), _encode(last_sync), _encode(server), _encode(last_sync_server)
-            )
-        ]
-        py_resolve = resolve_ref(local, last_sync, server, last_sync_server)
-        if c_resolve != py_resolve:
-            mismatches.append(("resolve", (local, last_sync, server, last_sync_server), c_resolve, py_resolve))
-
-        # Matcher — arg order (local, server, last_sync, last_sync_server).
-        c_match = bool(
-            _LIB.gavel_local_matches_server(
-                _encode(local), _encode(server), _encode(last_sync), _encode(last_sync_server)
-            )
-        )
-        py_match = matches_ref(local, server, last_sync, last_sync_server)
-        if c_match != py_match:
-            mismatches.append(("matches", (local, server, last_sync, last_sync_server), c_match, py_match))
-
-    assert not mismatches, f"{len(mismatches)} mismatch(es); first: {mismatches[0]}"

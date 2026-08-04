@@ -26,6 +26,28 @@ Clients vendor the vector files and pin a release — a changed `expected` value
 (silent contract drift is what gavel exists to prevent), which is exactly why it must surface as a major version, not
 slip through a patch.
 
+## What lives where, and why
+
+Four directories carry the contract, and it is easy to mistake one for another:
+
+|                    |                                                                                                                                                                                                                                                     |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vectors/`         | The contract itself. Everything else is a candidate that either satisfies these or does not.                                                                                                                                                        |
+| `reference/`       | A **second implementation** in pure Python — not a consumer of the core, it never loads the `.so`. It exists so the vectors have a first consumer and so a port author has something readable to read. Outside the release promise: free to change. |
+| `core/`            | The implementation that ships. C99 behind a C ABI, freestanding and allocation-free.                                                                                                                                                                |
+| `bindings/python/` | A **consumer** of the core: ctypes, no decision logic of its own. It is what shows a client author how to drive the ABI correctly.                                                                                                                  |
+
+Two things follow from that split.
+
+**An implementation is verified against the vectors, never against a sibling.** `core/tests` and `bindings/python/tests`
+run the vectors and then test what only their own layer owns — ABI shapes for the core, marshalling for the binding.
+Neither imports `reference/`. Comparing one candidate to another proves only that two things agree, which is not what
+conformance means here.
+
+**Breadth over the input space lives with the C drivers.** `core/tests/*_driver.c` walk the product of the inputs
+against oracles transcribed from `SPEC.md`, under ASan and UBSan. That is where a sweep belongs: it runs against the
+spec's reading, in the language the shipped code is written in, with the sanitizers watching.
+
 ## Process
 
 - **PRs only** — `main` is protected; squash merges, the PR title becomes the commit (conventional-commit format,
