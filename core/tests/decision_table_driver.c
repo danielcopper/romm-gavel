@@ -205,7 +205,7 @@ static gavel_sync_action oracle_decide(const gavel_local_file *local_file, const
 #define N_BOOKKEEPING 6
 #define N_HASHES 4
 #define N_TIMESTAMPS 4
-#define N_SYNC_SETS 5
+#define N_SYNC_SETS 6
 #define N_SLOTS (1 + N_TIMESTAMPS * N_HASHES * N_SYNC_SETS + N_TIMESTAMPS * N_TIMESTAMPS)
 
 /* Epoch of the "equal" timestamp, so the fall-through sees older / equal /
@@ -282,6 +282,13 @@ static void init_fixtures(void) {
     SYNC_ENTRIES[4][1].device_id = DEVICE_ID;
     SYNC_ENTRIES[4][1].is_current = 0;
     SYNC_COUNTS[4] = 2;
+    /* An entry with no device id at all. Every other fixture carries a real
+     * one, and the decision paths only compare hashes once both are known to be
+     * truthy — so without this the NULL arm of the id comparison is never
+     * reached from C, and only the ctypes harness covers it. */
+    SYNC_ENTRIES[5][0].device_id = NULL;
+    SYNC_ENTRIES[5][0].is_current = 1;
+    SYNC_COUNTS[5] = 1;
 }
 
 /* Fill ``buffer`` with slot number ``index`` and return how many saves it holds.
