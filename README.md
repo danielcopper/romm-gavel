@@ -39,15 +39,18 @@ to compare against, so save states become a consumer when the server gives them 
    (uncertainty never counts as a match; never destroy the only copy; a corrupt or implausibly shrunken local never
    auto-uploads; force-overwrite only on an explicit user choice).
 2. **`vectors/`** — language-neutral JSON conformance vectors: the 409/conflict resolution ladder and the full sync
-   decision (`input → expected action`). Any implementation in any language can run them and prove it decides the same
-   way — [`vectors/README.md`](vectors/README.md) has the how-to for pointing your own implementation at them.
-3. **`reference/`** — a pure-Python reference implementation, extracted from decky-romm-sync's production kernel.
-4. **`core/`** — a native C99 core behind a C ABI, for clients that want a drop-in instead of maintaining their own
-   implementation: the identity check, the ladder, and the full sync decision. Allocation-free and _freestanding_ — the
-   compiled library imports nothing at all, not even libc, so it loads on any x86_64 Linux whatever the distro ships.
-   Releases carry `libgavel-x86_64-linux.so` and its `.sha256`.
-5. **`bindings/python/`** — the official Python binding: a ctypes wrapper over the core, mirroring the reference's
-   signatures so a consumer swaps one import for the other.
+   decision (`input → expected action`). **These decide.** Any implementation in any language can run them and prove it
+   decides the same way; where an implementation and a vector disagree, the vector is right —
+   [`vectors/README.md`](vectors/README.md) has the how-to for pointing your own implementation at them.
+3. **`core/`** — **what most clients should take.** A native C99 core behind a C ABI: the identity check, the ladder,
+   and the full sync decision, already satisfying every vector. Allocation-free and _freestanding_ — the compiled
+   library imports nothing at all, not even libc, so it loads on any x86_64 Linux whatever the distro ships. Releases
+   carry `libgavel-x86_64-linux.so` and its `.sha256`, and since `v1.0.0` the ABI itself is part of the promise.
+4. **`bindings/python/`** — the official Python binding: a ctypes wrapper over the core, and the worked example of
+   driving the ABI correctly.
+5. **`reference/`** — a pure-Python second implementation, extracted from decky-romm-sync's production kernel. It exists
+   so the vectors have a first consumer and so a port author has something readable to read; it is not what you ship
+   against, and it is deliberately outside the release promise.
 
 Spec and vectors came first on purpose — they define what the core must do and prove it does it, rather than the core
 becoming the de-facto contract.
