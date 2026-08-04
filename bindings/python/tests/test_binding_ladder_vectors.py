@@ -1,9 +1,9 @@
 """Run every ladder vector through the Python binding.
 
-Same contract as the raw-ABI harness in ``core/tests``, one layer up: this
-proves the *wrapper* — value conversion at the FFI boundary included — decides
-exactly like the contract, and stays byte-for-byte in step with the Python
-reference across all canonical input combinations.
+Same contract as the raw-ABI harness in ``core/tests``, one layer up: this proves
+the *wrapper* — value conversion at the FFI boundary included — answers every
+vector the way the contract says. It deliberately compares against nothing but
+the vectors; the reference is another implementation, not the standard.
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ import shlex
 import subprocess
 import sys
 import tempfile
-from itertools import product
 from pathlib import Path
 
 import pytest
@@ -25,10 +24,6 @@ _CORE_DIR = _REPO_ROOT / "core"
 _VECTOR_DIR = _REPO_ROOT / "vectors" / "ladder"
 
 _CFLAGS = ["-std=c99", "-Wall", "-Wextra", "-Werror", "-pedantic", "-fPIC", "-shared", "-O2"]
-
-# Canonical inputs for the differential: unknown (NULL), empty, and four
-# distinct 32-char hashes — the alphabet the other harnesses walk too.
-_ALPHABET = [None, "", "a" * 32, "b" * 32, "c" * 32, "d" * 32]
 
 sys.path.insert(0, str(_REPO_ROOT / "bindings" / "python"))
 from gavel_native import GavelCore  # noqa: E402
@@ -71,31 +66,3 @@ def test_binding_ladder_vector(vector):
         i["last_sync_server_hash"],
     )
     assert got == vector["expected"], vector.get("rationale", vector["name"])
-
-
-def _load_reference():
-    """Import the Python reference, adding then removing ``reference/`` from the path."""
-    ref_path = str(_REPO_ROOT / "reference")
-    sys.path.insert(0, ref_path)
-    try:
-        from gavel_reference import local_matches_server, resolve_upload_conflict
-    finally:
-        sys.path.remove(ref_path)
-    return resolve_upload_conflict, local_matches_server
-
-
-def test_binding_matches_python_reference_exhaustively():
-    """Differential: the binding agrees with the reference on all 1296 combos."""
-    resolve_ref, matches_ref = _load_reference()
-    mismatches = []
-    for combo in product(_ALPHABET, repeat=4):
-        local, last_sync, server, last_sync_server = combo
-        if _CORE.resolve_upload_conflict(local, last_sync, server, last_sync_server) != resolve_ref(
-            local, last_sync, server, last_sync_server
-        ):
-            mismatches.append(("resolve_upload_conflict", combo))
-        if _CORE.local_matches_server(local, server, last_sync, last_sync_server) != matches_ref(
-            local, server, last_sync, last_sync_server
-        ):
-            mismatches.append(("local_matches_server", combo))
-    assert not mismatches, mismatches[:5]

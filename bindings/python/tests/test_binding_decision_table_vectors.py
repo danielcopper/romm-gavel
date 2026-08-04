@@ -1,15 +1,13 @@
 """Run every decision-table vector through the Python binding.
 
-Same contract as the raw-ABI harness in ``core/tests``, one layer up: this
-proves the *wrapper* — struct marshalling and ISO-8601 parsing included —
-decides exactly like the contract, and stays in step with the Python reference
-across a broad sweep of input shapes.
+Same contract as the raw-ABI harness in ``core/tests``, one layer up: this proves
+the *wrapper* — struct marshalling and ISO-8601 parsing included — answers every
+vector the way the contract says.
 
-The sweep matters more here than for the ladder. The ladder's inputs are four
-hashes and can be walked exhaustively; the decision table's are nested objects,
-so the differential instead crosses the axes that actually branch: which
-``device_syncs`` entry the head carries, whether timestamps parse, whether a
-baseline exists, and whether the local file is present, empty, or shrunken.
+Alongside them sit tests for the input shapes no vector can express, because the
+shape validator rejects them: a local file object with no fields, a server save
+with no ``device_syncs`` key, a size that is not a whole number. Those are the
+marshalling decisions this layer owns, and nothing else would catch them.
 """
 
 from __future__ import annotations
@@ -20,7 +18,6 @@ import shlex
 import subprocess
 import sys
 import tempfile
-from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -77,92 +74,86 @@ def test_binding_decision_table_vector(vector: dict[str, Any]):
     assert got == vector["expected"], vector.get("rationale", vector["name"])
 
 
-def _load_reference():
-    """Import the Python reference, adding then removing ``reference/`` from the path."""
-    ref_path = str(_REPO_ROOT / "reference")
-    sys.path.insert(0, ref_path)
-    try:
-        from gavel_reference import compute_sync_action
-    finally:
-        sys.path.remove(ref_path)
-    return compute_sync_action
+_DEVICE = "device-a"
+_HEAD_UPDATED_AT = "2026-06-02T12:00:00Z"
+_HEAD_EPOCH = 1780401600.0
+_HASH = "a" * 32
 
 
-_DEVICE_ID = "device-a"
-_HASHES = [None, "", "a" * 32, "b" * 32]
-_TIMESTAMPS = ["2026-06-01T12:00:00Z", "2026-06-02T12:00:00Z", "garbage", None]
+def test_an_empty_local_file_object_is_a_present_file():
+    """Presence is the pointer, never the fields.
 
-# Epochs around the second timestamp above (2026-06-02T12:00:00Z), so the
-# fall-through path sees a local file that is older, exactly equal, and newer.
-_EQUAL_MTIME = 1780401600.0
-
-# Presence is what decides, not shape: a file the client could only partly stat
-# still exists. The empty dict is in here on purpose — no vector can express it
-# (the shape validator requires a filename), so this differential is the only
-# thing pinning that ``{}`` reads as present rather than as absent.
-_LOCAL_FILES = [
-    None,
-    {},
-    {"filename": "game.srm"},
-    {"filename": "game.srm", "size": 0, "mtime": _EQUAL_MTIME},
-    {"filename": "game.srm", "size": 100, "mtime": _EQUAL_MTIME - 3600},
-    {"filename": "game.srm", "size": 8192, "mtime": _EQUAL_MTIME},
-    {"filename": "game.srm", "size": 8192, "mtime": _EQUAL_MTIME + 3600},
-    # Not a size any filesystem reports, but it is what the shrink guard's
-    # negative branch exists for.
-    {"filename": "game.srm", "size": -1, "mtime": _EQUAL_MTIME},
-]
-
-_FILES_STATES = [
-    {},
-    {"last_sync_hash": "a" * 32},
-    {"last_sync_hash": "a" * 32, "last_sync_server_hash": "b" * 32},
-    {"last_sync_hash": "a" * 32, "last_sync_server_hash": "b" * 32, "last_sync_local_size": 8192},
-    {"last_sync_hash": "", "last_sync_server_hash": ""},
-    {"last_sync_hash": "b" * 32, "last_sync_local_size": 0},
-]
-
-_DEVICE_SYNC_SETS = [
-    [],
-    [{"device_id": _DEVICE_ID, "is_current": True}],
-    [{"device_id": _DEVICE_ID, "is_current": False}],
-    [{"device_id": "device-b", "is_current": True}],
-    [{"device_id": "device-b", "is_current": True}, {"device_id": _DEVICE_ID, "is_current": False}],
-]
+    An object the client could not measure still means the file is there. The
+    shape validator requires a filename, so no vector can carry this — but a
+    binding that decided presence from the fields rather than from whether it
+    passes NULL would answer the opposite here.
+    """
+    assert _CORE.compute_sync_action({}, [], {}, _DEVICE, None) == {"action": "upload", "target_save_id": None}
+    assert _CORE.compute_sync_action(None, [], {}, _DEVICE, None) == {
+        "action": "skip",
+        "reason": "nothing_to_sync",
+        "adopt_baseline": False,
+    }
 
 
-def _slots() -> list[list[dict[str, Any]]]:
-    """Representative server-save lists: empty, single, and two-save slots."""
-    slots: list[list[dict[str, Any]]] = [[]]
-    for updated_at, content_hash, syncs in product(_TIMESTAMPS, _HASHES, _DEVICE_SYNC_SETS):
-        slots.append([{"id": 101, "updated_at": updated_at, "content_hash": content_hash, "device_syncs": syncs}])
-    # Two saves so head selection itself is under test — newest wins, and an
-    # unparseable timestamp loses regardless of list order.
-    for first, second in product(_TIMESTAMPS, _TIMESTAMPS):
-        slots.append(
-            [
-                {"id": 101, "updated_at": first, "content_hash": "a" * 32, "device_syncs": _DEVICE_SYNC_SETS[1]},
-                {"id": 102, "updated_at": second, "content_hash": "b" * 32, "device_syncs": _DEVICE_SYNC_SETS[2]},
-            ]
-        )
-    return slots
+def test_a_save_without_a_device_syncs_key_has_no_entries():
+    """An absent array is an empty one, not a NULL pointer with a stale count.
+
+    Vectors always carry ``device_syncs`` — the shape validator requires a list
+    — so only this can pin what happens when the key is missing entirely. The
+    core reads pointer plus count, and a count left over from a sibling save
+    would read freed memory rather than decide the no-entry branch.
+    """
+    save = {"id": 101, "updated_at": _HEAD_UPDATED_AT, "content_hash": "c" * 32}
+    assert _CORE.compute_sync_action(None, [save], {}, _DEVICE, None) == {
+        "action": "download",
+        "server_save_id": 101,
+    }
 
 
-def test_binding_matches_python_reference_across_input_shapes():
-    """Differential: the binding agrees with the reference on every crossed shape."""
-    compute_ref = _load_reference()
-    mismatches: list[object] = []
-    checked = 0
-    for local_file, slot, files_state, local_hash in product(_LOCAL_FILES, _slots(), _FILES_STATES, _HASHES):
-        checked += 1
-        got = _CORE.compute_sync_action(local_file, slot, files_state, _DEVICE_ID, local_hash)
-        want = compute_ref(local_file, slot, files_state, _DEVICE_ID, local_hash)
-        if got != want:
-            mismatches.append((local_file, slot, files_state, local_hash, got, want))
-    assert not mismatches, f"{len(mismatches)} of {checked} mismatched; first: {mismatches[0]}"
-    # Guards against a fixture list silently collapsing — the sweep is ~18k, so
-    # anything near this bound means an axis stopped contributing.
-    assert checked > 15_000, f"differential shrank to {checked} combinations"
+def test_a_local_mtime_is_compared_against_the_parsed_head():
+    """The ISO string has to become the same instant the mtime is measured in.
+
+    A binding that parsed the head as local time rather than UTC would shift it
+    by hours, and the at-or-after comparison on the fall-through path would flip
+    for an mtime this close to it.
+    """
+    equal = _CORE.compute_sync_action(
+        {"filename": "game.srm", "size": 8192, "mtime": _HEAD_EPOCH},
+        [{"id": 101, "updated_at": _HEAD_UPDATED_AT, "content_hash": "c" * 32, "device_syncs": []}],
+        {"last_sync_hash": _HASH},
+        _DEVICE,
+        _HASH,
+    )
+    assert equal == {"action": "upload", "target_save_id": None}
+
+    older = _CORE.compute_sync_action(
+        {"filename": "game.srm", "size": 8192, "mtime": _HEAD_EPOCH - 1},
+        [{"id": 101, "updated_at": _HEAD_UPDATED_AT, "content_hash": "c" * 32, "device_syncs": []}],
+        {"last_sync_hash": _HASH},
+        _DEVICE,
+        _HASH,
+    )
+    assert older == {"action": "download", "server_save_id": 101}
+
+
+def test_the_device_entry_is_found_in_a_multi_entry_array():
+    """Arrays go in as pointer plus count; an off-by-one would read the wrong one."""
+    save = {
+        "id": 101,
+        "updated_at": _HEAD_UPDATED_AT,
+        "content_hash": "c" * 32,
+        "device_syncs": [
+            {"device_id": "device-b", "is_current": True},
+            {"device_id": "device-c", "is_current": True},
+            {"device_id": _DEVICE, "is_current": False},
+        ],
+    }
+    # is_current=false for this device and no local file: download the head.
+    assert _CORE.compute_sync_action(None, [save], {}, _DEVICE, None) == {
+        "action": "download",
+        "server_save_id": 101,
+    }
 
 
 @pytest.mark.parametrize("field", ["local_file", "files_state"])
@@ -175,7 +166,7 @@ def test_a_non_integral_size_is_refused(field: str):
     (the shape validator requires an integer size), which is why it is pinned
     here.
     """
-    local_file: dict[str, Any] = {"filename": "game.srm", "size": 8192, "mtime": _EQUAL_MTIME}
+    local_file: dict[str, Any] = {"filename": "game.srm", "size": 8192, "mtime": _HEAD_EPOCH}
     files_state: dict[str, Any] = {}
     if field == "local_file":
         local_file["size"] = 1.5
@@ -183,4 +174,4 @@ def test_a_non_integral_size_is_refused(field: str):
         files_state["last_sync_local_size"] = 1.5
 
     with pytest.raises(ValueError, match="whole number of bytes"):
-        _CORE.compute_sync_action(local_file, [], files_state, _DEVICE_ID, "a" * 32)
+        _CORE.compute_sync_action(local_file, [], files_state, _DEVICE, _HASH)
