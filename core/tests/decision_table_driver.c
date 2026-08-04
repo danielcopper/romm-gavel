@@ -65,17 +65,103 @@ static int oracle_shrunken(const gavel_local_file *local_file, const gavel_bookk
     return (double)local_file->size < baseline;
 }
 
+/* The facts SPEC.md's three branch tables read, computed once. */
+typedef struct {
+    const gavel_server_save *head;
+    const gavel_local_file *local_file;
+    const gavel_bookkeeping *bk;
+    const char *local_hash;
+    int present;
+    int has_baseline;
+    int diverged;
+    int identical;
+} oracle_facts;
+
+/* Row 2 — newest by updated_at; unknown sorts as 0 and so loses to any positive
+ * timestamp. Ties keep the earlier element. */
+static const gavel_server_save *oracle_head(const gavel_server_save *saves, size_t save_count) {
+    const gavel_server_save *head = &saves[0];
+    for (size_t i = 1; i < save_count; i++) {
+        double key = saves[i].has_updated_at ? saves[i].updated_at_epoch : 0.0;
+        double best = head->has_updated_at ? head->updated_at_epoch : 0.0;
+        if (key > best) {
+            head = &saves[i];
+        }
+    }
+    return head;
+}
+
+static const gavel_device_sync *oracle_entry(const gavel_server_save *head, const char *device_id) {
+    for (size_t i = 0; i < head->device_sync_count; i++) {
+        if (ids_equal(head->device_syncs[i].device_id, device_id)) {
+            return &head->device_syncs[i];
+        }
+    }
+    return NULL;
+}
+
+/* Row 3a — is_current=true: the server still tracks this device's version. */
+static void oracle_when_is_current(const oracle_facts *f, gavel_sync_action *out) {
+    if (!f->present) {
+        out->action = GAVEL_ACTION_DOWNLOAD;
+    } else if (!f->has_baseline) {
+        out->action = GAVEL_ACTION_SKIP;
+        out->adopt_baseline = 1;
+        out->server_save_id = 0;
+    } else if (!f->diverged) {
+        out->action = GAVEL_ACTION_SKIP;
+        out->server_save_id = 0;
+    } else if (oracle_shrunken(f->local_file, f->bk)) {
+        out->action = GAVEL_ACTION_CONFLICT;
+    } else {
+        out->action = GAVEL_ACTION_UPLOAD;
+        out->target_save_id = f->head->id;
+        out->has_target_save_id = 1;
+        out->server_save_id = 0;
+    }
+}
+
+/* Row 3b — is_current=false: the head moved past this device. */
+static void oracle_when_not_current(const oracle_facts *f, gavel_sync_action *out) {
+    if (f->present && (!f->has_baseline || f->diverged) && !f->identical) {
+        out->action = GAVEL_ACTION_CONFLICT;
+    } else {
+        out->action = GAVEL_ACTION_DOWNLOAD;
+    }
+}
+
+/* Row 3c — no entry: this device never touched the chosen head. */
+static void oracle_when_no_entry(const oracle_facts *f, gavel_sync_action *out) {
+    if (!f->present) {
+        out->action = GAVEL_ACTION_DOWNLOAD;
+    } else if (f->identical) {
+        out->action = GAVEL_ACTION_SKIP;
+        out->adopt_baseline = 1;
+        out->server_save_id = 0;
+    } else if (f->has_baseline && f->diverged) {
+        /* Mirrors 3b: local moved and the head is not those bytes. */
+        out->action = GAVEL_ACTION_CONFLICT;
+    } else if (!f->has_baseline && is_truthy(f->local_hash)) {
+        /* A known hash with no baseline at all: provenance is unresolvable. */
+        out->action = GAVEL_ACTION_CONFLICT;
+    } else if (f->local_file->has_mtime && f->head->has_updated_at &&
+               f->local_file->mtime >= f->head->updated_at_epoch) {
+        out->action = GAVEL_ACTION_UPLOAD;
+        out->server_save_id = 0;
+    } else {
+        out->action = GAVEL_ACTION_DOWNLOAD;
+    }
+}
+
 /* The full decision, as SPEC.md's tables read top to bottom. */
 static gavel_sync_action oracle_decide(const gavel_local_file *local_file, const gavel_server_save *saves,
                                        size_t save_count, const gavel_bookkeeping *bk, const char *device_id,
                                        const char *local_hash) {
     gavel_sync_action out;
-    const gavel_server_save *head;
-    const gavel_device_sync *entry = NULL;
+    const gavel_device_sync *entry;
     const char *last_sync = bk != NULL ? bk->last_sync_hash : NULL;
     const char *last_sync_server = bk != NULL ? bk->last_sync_server_hash : NULL;
-    int has_baseline, diverged, identical, present;
-    size_t i;
+    oracle_facts f;
 
     memset(&out, 0, sizeof(out));
 
@@ -90,81 +176,23 @@ static gavel_sync_action oracle_decide(const gavel_local_file *local_file, const
         return out;
     }
 
-    /* Row 2 — newest by updated_at; unknown sorts as 0 and so loses to any
-     * positive timestamp. Ties keep the earlier element. */
-    head = &saves[0];
-    for (i = 1; i < save_count; i++) {
-        double key = saves[i].has_updated_at ? saves[i].updated_at_epoch : 0.0;
-        double best = head->has_updated_at ? head->updated_at_epoch : 0.0;
-        if (key > best) {
-            head = &saves[i];
-        }
-    }
+    f.head = oracle_head(saves, save_count);
+    f.local_file = local_file;
+    f.bk = bk;
+    f.local_hash = local_hash;
+    f.present = local_file != NULL;
+    f.has_baseline = is_truthy(last_sync);
+    f.diverged = is_truthy(local_hash) && !ids_equal(local_hash, last_sync);
+    f.identical = oracle_identity(local_hash, f.head->content_hash, last_sync, last_sync_server);
+    entry = oracle_entry(f.head, device_id);
 
-    for (i = 0; i < head->device_sync_count; i++) {
-        if (ids_equal(head->device_syncs[i].device_id, device_id)) {
-            entry = &head->device_syncs[i];
-            break;
-        }
-    }
-
-    present = local_file != NULL;
-    has_baseline = is_truthy(last_sync);
-    diverged = is_truthy(local_hash) && !ids_equal(local_hash, last_sync);
-    identical = oracle_identity(local_hash, head->content_hash, last_sync, last_sync_server);
-
-    out.server_save_id = head->id;
-
-    /* Row 3a — is_current=true. */
+    out.server_save_id = f.head->id;
     if (entry != NULL && entry->is_current) {
-        if (!present) {
-            out.action = GAVEL_ACTION_DOWNLOAD;
-        } else if (!has_baseline) {
-            out.action = GAVEL_ACTION_SKIP;
-            out.adopt_baseline = 1;
-            out.server_save_id = 0;
-        } else if (!diverged) {
-            out.action = GAVEL_ACTION_SKIP;
-            out.server_save_id = 0;
-        } else if (oracle_shrunken(local_file, bk)) {
-            out.action = GAVEL_ACTION_CONFLICT;
-        } else {
-            out.action = GAVEL_ACTION_UPLOAD;
-            out.target_save_id = head->id;
-            out.has_target_save_id = 1;
-            out.server_save_id = 0;
-        }
-        return out;
-    }
-
-    /* Row 3b — is_current=false. */
-    if (entry != NULL) {
-        if (!present) {
-            out.action = GAVEL_ACTION_DOWNLOAD;
-        } else if (!has_baseline || diverged) {
-            out.action = identical ? GAVEL_ACTION_DOWNLOAD : GAVEL_ACTION_CONFLICT;
-        } else {
-            out.action = GAVEL_ACTION_DOWNLOAD;
-        }
-        return out;
-    }
-
-    /* Row 3c — no entry for this device on the head. */
-    if (!present) {
-        out.action = GAVEL_ACTION_DOWNLOAD;
-    } else if (identical) {
-        out.action = GAVEL_ACTION_SKIP;
-        out.adopt_baseline = 1;
-        out.server_save_id = 0;
-    } else if (has_baseline && diverged) {
-        out.action = GAVEL_ACTION_CONFLICT;
-    } else if (!has_baseline && is_truthy(local_hash)) {
-        out.action = GAVEL_ACTION_CONFLICT;
-    } else if (local_file->has_mtime && head->has_updated_at && local_file->mtime >= head->updated_at_epoch) {
-        out.action = GAVEL_ACTION_UPLOAD;
-        out.server_save_id = 0;
+        oracle_when_is_current(&f, &out);
+    } else if (entry != NULL) {
+        oracle_when_not_current(&f, &out);
     } else {
-        out.action = GAVEL_ACTION_DOWNLOAD;
+        oracle_when_no_entry(&f, &out);
     }
     return out;
 }
@@ -177,7 +205,7 @@ static gavel_sync_action oracle_decide(const gavel_local_file *local_file, const
 #define N_BOOKKEEPING 6
 #define N_HASHES 4
 #define N_TIMESTAMPS 4
-#define N_SYNC_SETS 5
+#define N_SYNC_SETS 6
 #define N_SLOTS (1 + N_TIMESTAMPS * N_HASHES * N_SYNC_SETS + N_TIMESTAMPS * N_TIMESTAMPS)
 
 /* Epoch of the "equal" timestamp, so the fall-through sees older / equal /
@@ -254,6 +282,13 @@ static void init_fixtures(void) {
     SYNC_ENTRIES[4][1].device_id = DEVICE_ID;
     SYNC_ENTRIES[4][1].is_current = 0;
     SYNC_COUNTS[4] = 2;
+    /* An entry with no device id at all. Every other fixture carries a real
+     * one, and the decision paths only compare hashes once both are known to be
+     * truthy — so without this the NULL arm of the id comparison is never
+     * reached from C, and only the ctypes harness covers it. */
+    SYNC_ENTRIES[5][0].device_id = NULL;
+    SYNC_ENTRIES[5][0].is_current = 1;
+    SYNC_COUNTS[5] = 1;
 }
 
 /* Fill ``buffer`` with slot number ``index`` and return how many saves it holds.
@@ -332,52 +367,62 @@ static int actions_equal(const gavel_sync_action *a, const gavel_sync_action *b)
            a->server_save_id == b->server_save_id;
 }
 
+/* Every axis but the slot, as one counter: the digits of `n` are the fixture
+ * indices, so the sweep stays a full product without four levels of nesting. */
+#define INNER_COMBINATIONS (N_LOCAL_FILES * N_BOOKKEEPING * N_HASHES)
+
+/* One combination: the result is well-formed and matches the oracle. Returns 0
+ * and explains on the first failure. */
+static int check_combination(const gavel_server_save *saves, size_t save_count, size_t slot_index, size_t local_index,
+                             size_t bk_index, size_t hash_index) {
+    const gavel_local_file *local_file = local_index == 0 ? NULL : &LOCAL_FILES[local_index];
+    const gavel_bookkeeping *bk = bk_index == 0 ? NULL : &BOOKKEEPING[bk_index];
+    const char *local_hash = HASHES[hash_index];
+    gavel_sync_action got;
+    gavel_sync_action want;
+    const char *problem;
+
+    memset(&got, 0xAB, sizeof(got)); /* poison: every field must be written */
+    gavel_compute_sync_action(local_file, saves, save_count, bk, DEVICE_ID, local_hash, &got);
+
+    problem = well_formed(&got);
+    if (problem != NULL) {
+        fprintf(stderr, "%s (slot=%zu local=%zu bk=%zu hash=%zu)\n", problem, slot_index, local_index, bk_index,
+                hash_index);
+        return 0;
+    }
+
+    want = oracle_decide(local_file, saves, save_count, bk, DEVICE_ID, local_hash);
+    if (!actions_equal(&got, &want)) {
+        fprintf(stderr,
+                "disagrees with oracle (slot=%zu local=%zu bk=%zu hash=%zu): "
+                "got action=%d reason=%d adopt=%d target=%lld/%d server=%lld; "
+                "want action=%d reason=%d adopt=%d target=%lld/%d server=%lld\n",
+                slot_index, local_index, bk_index, hash_index, (int)got.action, (int)got.reason, got.adopt_baseline,
+                (long long)got.target_save_id, got.has_target_save_id, (long long)got.server_save_id, (int)want.action,
+                (int)want.reason, want.adopt_baseline, (long long)want.target_save_id, want.has_target_save_id,
+                (long long)want.server_save_id);
+        return 0;
+    }
+    return 1;
+}
+
 int main(void) {
     gavel_server_save slot[2];
     long checked = 0;
-    size_t slot_index, local_index, bk_index, hash_index;
 
     init_fixtures();
 
-    for (slot_index = 0; slot_index < N_SLOTS; slot_index++) {
+    for (size_t slot_index = 0; slot_index < N_SLOTS; slot_index++) {
         size_t save_count = build_slot(slot_index, slot);
-        for (local_index = 0; local_index < N_LOCAL_FILES; local_index++) {
-            const gavel_local_file *local_file = local_index == 0 ? NULL : &LOCAL_FILES[local_index];
-            for (bk_index = 0; bk_index < N_BOOKKEEPING; bk_index++) {
-                const gavel_bookkeeping *bk = bk_index == 0 ? NULL : &BOOKKEEPING[bk_index];
-                for (hash_index = 0; hash_index < N_HASHES; hash_index++) {
-                    const char *local_hash = HASHES[hash_index];
-                    gavel_sync_action got;
-                    gavel_sync_action want;
-                    const char *problem;
-
-                    memset(&got, 0xAB, sizeof(got)); /* poison: every field must be written */
-                    gavel_compute_sync_action(local_file, save_count > 0 ? slot : NULL, save_count, bk, DEVICE_ID,
-                                              local_hash, &got);
-                    checked++;
-
-                    problem = well_formed(&got);
-                    if (problem != NULL) {
-                        fprintf(stderr, "%s (slot=%zu local=%zu bk=%zu hash=%zu)\n", problem, slot_index, local_index,
-                                bk_index, hash_index);
-                        return 1;
-                    }
-
-                    want =
-                        oracle_decide(local_file, save_count > 0 ? slot : NULL, save_count, bk, DEVICE_ID, local_hash);
-                    if (!actions_equal(&got, &want)) {
-                        fprintf(stderr,
-                                "disagrees with oracle (slot=%zu local=%zu bk=%zu hash=%zu): "
-                                "got action=%d reason=%d adopt=%d target=%lld/%d server=%lld; "
-                                "want action=%d reason=%d adopt=%d target=%lld/%d server=%lld\n",
-                                slot_index, local_index, bk_index, hash_index, (int)got.action, (int)got.reason,
-                                got.adopt_baseline, (long long)got.target_save_id, got.has_target_save_id,
-                                (long long)got.server_save_id, (int)want.action, (int)want.reason, want.adopt_baseline,
-                                (long long)want.target_save_id, want.has_target_save_id,
-                                (long long)want.server_save_id);
-                        return 1;
-                    }
-                }
+        const gavel_server_save *saves = save_count > 0 ? slot : NULL;
+        for (size_t n = 0; n < INNER_COMBINATIONS; n++) {
+            size_t local_index = n / (N_BOOKKEEPING * N_HASHES);
+            size_t bk_index = (n / N_HASHES) % N_BOOKKEEPING;
+            size_t hash_index = n % N_HASHES;
+            checked++;
+            if (!check_combination(saves, save_count, slot_index, local_index, bk_index, hash_index)) {
+                return 1;
             }
         }
     }

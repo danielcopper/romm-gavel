@@ -35,6 +35,21 @@ run = [
     "./build/gavel_table_driver",
 ]
 
+[tasks.coverage]
+description = "Produce the C coverage report Sonar imports (needs a real gcc — zig cc ships no gcov runtime)"
+run = [
+    "mkdir -p build/cov build/gcov",
+    "gcc --coverage -std=c99 -O0 -g -c core/gavel.c -o build/cov/gavel.o",
+    "gcc --coverage -std=c99 -O0 -g -c core/tests/exhaustive_driver.c -o build/cov/exhaustive.o",
+    "gcc --coverage -std=c99 -O0 -g -c core/tests/decision_table_driver.c -o build/cov/table.o",
+    "gcc --coverage build/cov/gavel.o build/cov/exhaustive.o -o build/cov/exhaustive",
+    "gcc --coverage build/cov/gavel.o build/cov/table.o -o build/cov/table",
+    "./build/cov/exhaustive",
+    "./build/cov/table",
+    "gcov -o build/cov core/gavel.c",
+    "mv gavel.c.gcov build/gcov/",
+]
+
 [tasks.validate]
 description = "Check every vector file's shape"
 run = "python scripts/validate_vectors.py"

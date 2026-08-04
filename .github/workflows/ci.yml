@@ -108,6 +108,23 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Produce C coverage
+        # gavel.c is compiled once and both drivers link that same object, so
+        # the two sweeps accumulate into one .gcda — a merged report rather
+        # than two partial ones. Only the core is reported; the drivers are
+        # tests and Sonar does not ask them for coverage.
+        run: |
+          mkdir -p build/cov build/gcov
+          cc --coverage -std=c99 -O0 -g -c core/gavel.c -o build/cov/gavel.o
+          cc --coverage -std=c99 -O0 -g -c core/tests/exhaustive_driver.c -o build/cov/exhaustive.o
+          cc --coverage -std=c99 -O0 -g -c core/tests/decision_table_driver.c -o build/cov/table.o
+          cc --coverage build/cov/gavel.o build/cov/exhaustive.o -o build/cov/exhaustive
+          cc --coverage build/cov/gavel.o build/cov/table.o -o build/cov/table
+          ./build/cov/exhaustive
+          ./build/cov/table
+          gcov -o build/cov core/gavel.c
+          mv gavel.c.gcov build/gcov/
+
       - name: Produce Python coverage
         # Run here rather than shipping an artifact between jobs: the whole
         # suite is ~1.5s, so a second run costs less than the plumbing would.
