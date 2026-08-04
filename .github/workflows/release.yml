@@ -4,9 +4,9 @@ on:
   push:
     branches: [main]
 
-permissions:
-  contents: write
-  pull-requests: write
+# No workflow-level permissions: each job below asks for exactly what it needs,
+# so a step added to the wrong job cannot quietly inherit write access.
+permissions: {}
 
 # Serialize releases: two quick pushes to main must not run release-please
 # concurrently and race on the release PR / tag.
@@ -18,6 +18,9 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
@@ -47,6 +50,9 @@ jobs:
     if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Only to attach the built .so and its checksum to the release.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
 
