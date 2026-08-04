@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/danielcopper/romm-gavel/compare/v1.0.0...v1.0.1) (2026-08-04)
+
+
+### Bug Fixes
+
+* rebuild the base ref rather than pass it through, declare CI permissions ([#35](https://github.com/danielcopper/romm-gavel/issues/35)) ([2599a55](https://github.com/danielcopper/romm-gavel/commit/2599a55e43549b2ce86519f7dd075abc8c25620c))
+* **scripts:** validate the base ref, and flatten the expected-shape check ([#31](https://github.com/danielcopper/romm-gavel/issues/31)) ([8044456](https://github.com/danielcopper/romm-gavel/commit/80444564e45be2e1cb7bf8538a5fe9b79f050dda))
+
 ## [1.0.0](https://github.com/danielcopper/romm-gavel/compare/v0.4.0...v1.0.0) (2026-08-03)
 
 
