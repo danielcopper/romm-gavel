@@ -142,9 +142,8 @@ static double gavel_head_sort_key(const gavel_server_save *save) {
 static const gavel_server_save *gavel_pick_head(const gavel_server_save *saves, size_t save_count) {
     const gavel_server_save *head = &saves[0];
     double best = gavel_head_sort_key(head);
-    size_t i;
 
-    for (i = 1; i < save_count; i++) {
+    for (size_t i = 1; i < save_count; i++) {
         double key = gavel_head_sort_key(&saves[i]);
         if (key > best) {
             head = &saves[i];
@@ -156,12 +155,10 @@ static const gavel_server_save *gavel_pick_head(const gavel_server_save *saves, 
 
 /* This device's ``device_syncs`` entry on the head, or NULL if it has none. */
 static const gavel_device_sync *gavel_find_device_sync(const gavel_server_save *head, const char *device_id) {
-    size_t i;
-
     if (head->device_syncs == NULL) {
         return NULL;
     }
-    for (i = 0; i < head->device_sync_count; i++) {
+    for (size_t i = 0; i < head->device_sync_count; i++) {
         if (gavel_ids_equal(head->device_syncs[i].device_id, device_id)) {
             return &head->device_syncs[i];
         }
