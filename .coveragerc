@@ -1,0 +1,14 @@
+# Coverage for the SonarQube Cloud import.
+#
+# relative_files plus include (rather than two --cov source roots) is what keeps
+# the paths in coverage.xml unique. With a source root per package, coverage
+# writes bare basenames and Sonar cannot place __init__.py, which exists in
+# both — it drops the file and warns. Repo-relative paths have no such clash.
+[run]
+relative_files = True
+include =
+    reference/gavel_reference/*
+    bindings/python/gavel_native/*
+
+[xml]
+output = coverage.xml

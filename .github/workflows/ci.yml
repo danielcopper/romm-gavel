@@ -138,8 +138,7 @@ jobs:
         run: |
           pip install --only-binary :all: -r requirements-ci.txt
           python -m pytest reference/tests core/tests bindings/python/tests \
-            --cov=reference/gavel_reference --cov=bindings/python/gavel_native \
-            --cov-report=xml -q
+            --cov --cov-report=xml -q
 
       - name: SonarQube Cloud scan
         # C is analysed in AutoConfig mode — the CI default, no build wrapper
