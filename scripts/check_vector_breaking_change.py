@@ -26,13 +26,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 VECTOR_GLOB = "vectors/*/*.json"
 TITLE_BANG = re.compile(r"^[a-z]+(\([^)]*\))?!:")
-# What a git ref may look like here: the characters branches, tags and remote
-# refs actually use. Deliberately narrow — see _checked_ref.
-REF_PATTERN = re.compile(r"[A-Za-z0-9._/-]+")
+# What a git ref may contain here: the characters branches, tags and remote refs
+# actually use. Deliberately narrow — see _checked_ref.
+REF_ALPHABET = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/-")
 
 
 def _checked_ref(ref: str) -> str:
-    """Return *ref* if it is a plausible git ref, else abort.
+    """Return a plausible git ref rebuilt from *ref*, or abort.
 
     The ref reaches this script from the command line, and CI passes whatever
     ``github.base_ref`` holds. Nothing here goes through a shell, so this is not
@@ -40,10 +40,17 @@ def _checked_ref(ref: str) -> str:
     leading ``-`` as an option, so an argument like ``--upload-pack=…`` would be
     a flag rather than a ref. Refusing anything that is not ref-shaped closes
     that without needing to know which flags each git subcommand accepts.
+
+    What leaves this function is built character by character from a fixed
+    alphabet rather than handed straight through, so no byte of the argument
+    reaches git unexamined.
     """
-    if ref.startswith("-") or not REF_PATTERN.fullmatch(ref):
+    if ref.startswith("-"):
         sys.exit(f"refusing to use {ref!r} as a git ref")
-    return ref
+    rebuilt = "".join(c for c in ref if c in REF_ALPHABET)
+    if not rebuilt or rebuilt != ref:
+        sys.exit(f"refusing to use {ref!r} as a git ref")
+    return rebuilt
 
 
 def _git(*args: str) -> str:

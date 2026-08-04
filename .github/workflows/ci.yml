@@ -8,6 +8,13 @@ on:
     # breaking-change gate reads the title, so a late edit must re-evaluate.
     types: [opened, edited, synchronize, reopened]
 
+# Nothing here writes to the repository — every job checks out, builds and
+# reports. Granting read at workflow level is both the least privilege that
+# works and the explicit declaration code scanning asks for; release.yml, which
+# does need write, declares it per job instead.
+permissions:
+  contents: read
+
 jobs:
   breaking-gate:
     if: github.event_name == 'pull_request'
