@@ -37,6 +37,17 @@ GIF_FILTER = (
 )
 
 
+# Sizes reach rsvg-convert as command arguments, so they are range-checked
+# before they get there rather than passed through as whatever was typed.
+MIN_PX, MAX_PX = 16, 4096
+
+
+def checked_px(value: int, flag: str) -> int:
+    if not MIN_PX <= value <= MAX_PX:
+        raise SystemExit(f"{flag} must be between {MIN_PX} and {MAX_PX}, not {value}")
+    return value
+
+
 def require(*tools: str) -> None:
     missing = [t for t in tools if shutil.which(t) is None]
     if missing:
@@ -98,7 +109,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     out = ROOT / "assets" if args.install else pathlib.Path(__file__).parent / "out"
-    build(out, gen.BY_NAME[args.palette], anim.BY_NAME[args.motion], args.size, args.gif_size)
+    build(
+        out,
+        gen.BY_NAME[args.palette],
+        anim.BY_NAME[args.motion],
+        checked_px(args.size, "--size"),
+        checked_px(args.gif_size, "--gif-size"),
+    )
     return 0
 
 

@@ -195,7 +195,7 @@ def dots(pal: Palette, g: Geometry, swing: float = 0.0) -> str:
 
 
 def _swung(shapes: str, swing: float, g: Geometry) -> str:
-    if swing == 0.0:
+    if math.isclose(swing, 0.0):
         return shapes
     return f'<g transform="rotate({swing:.2f} {CX} {CY + g.pivot_y})">{shapes}</g>'
 

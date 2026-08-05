@@ -14,3 +14,4 @@ build/
 # Coverage report for the SonarQube Cloud scan
 coverage.xml
 .coverage
+scripts/logo/out/
