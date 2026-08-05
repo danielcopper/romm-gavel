@@ -5,7 +5,9 @@
  * (exhaustive_driver.c). The decision table's are nested objects, so this driver
  * crosses the axes that actually branch instead: local file present / absent /
  * incomplete / shrunken, the head's device_syncs entry, whether timestamps are
- * known, and which parts of the bookkeeping record exist. 13968 combinations.
+ * known, and which parts of the bookkeeping record exist. The run prints how
+ * many combinations that came to — read it there rather than from here, since a
+ * number in a comment goes stale the moment a fixture is added.
  *
  * Two things are checked on every combination:
  *   - the decision matches an oracle transcribed from SPEC.md's three decision
