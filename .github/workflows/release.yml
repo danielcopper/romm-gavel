@@ -82,37 +82,27 @@ jobs:
             exit 1
           fi
 
-      - name: Smoke-test load and decide
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned tooling
+        run: "pip install --only-binary :all: -r requirements-ci.txt"
+
+      - name: Run the conformance vectors against this artifact
+        # CI proves the contract on every push, but it proves it on libraries
+        # the harnesses compile for themselves — different flags, different
+        # bytes. GAVEL_LIBRARY points them at the .so about to be published, so
+        # the vectors judge exactly what a consumer vendors. The reference suite
+        # is left out on purpose: it never loads a library.
+        env:
+          GAVEL_LIBRARY: ${{ github.workspace }}/libgavel-x86_64-linux.so
         run: |
-          python3 - <<'EOF'
-          import ctypes
-
-
-          class SyncAction(ctypes.Structure):
-              _fields_ = (
-                  ("action", ctypes.c_int),
-                  ("reason", ctypes.c_int),
-                  ("adopt_baseline", ctypes.c_int),
-                  ("target_save_id", ctypes.c_int64),
-                  ("has_target_save_id", ctypes.c_int),
-                  ("server_save_id", ctypes.c_int64),
-              )
-
-
-          lib = ctypes.CDLL("./libgavel-x86_64-linux.so")
-          lib.gavel_resolve_upload_conflict.argtypes = [ctypes.c_char_p] * 4
-          lib.gavel_resolve_upload_conflict.restype = ctypes.c_int
-          assert lib.gavel_resolve_upload_conflict(b"a" * 32, b"a" * 32, None, None) == 0
-          assert lib.gavel_resolve_upload_conflict(None, None, None, None) == 1
-
-          # An empty slot with no local file is the one decision reachable
-          # without building the input structs: nothing to sync.
-          result = SyncAction()
-          lib.gavel_compute_sync_action(None, None, ctypes.c_size_t(0), None, b"device-a", None, ctypes.byref(result))
-          assert result.action == 0, result.action  # skip
-          assert result.reason == 1, result.reason  # nothing_to_sync
-          print("smoke ok")
-          EOF
+          # Losing the env block above would not turn this step red: the
+          # harnesses would compile a library of their own and pass, under a
+          # step name claiming the artifact had been judged. Refuse instead.
+          test -n "$GAVEL_LIBRARY"
+          python -m pytest core/tests bindings/python/tests -q
 
       - name: Checksum and attach to the release
         env:

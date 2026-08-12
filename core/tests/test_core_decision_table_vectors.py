@@ -7,6 +7,9 @@ independent of the wrapper that is itself under test one layer up. It doubles as
 a worked example of calling ``gavel_compute_sync_action`` from nothing but the
 header: build the structs, pass pointer + count for each array, read the tagged
 result back out.
+
+Library selection matches the ladder harness: ``$CC`` compiles the core, or
+``$GAVEL_LIBRARY`` names an already-built ``.so`` to judge instead.
 """
 
 from __future__ import annotations
@@ -78,15 +81,27 @@ class SyncAction(ctypes.Structure):
     )
 
 
-def _compile_lib() -> ctypes.CDLL:
-    """Compile the core to a shared object with ``$CC`` and load it via ctypes."""
-    cc = shlex.split(os.environ.get("CC", "cc"))
-    with tempfile.TemporaryDirectory(prefix="gavel-core-table-") as tmpdir:
-        so_path = Path(tmpdir) / "libgavel.so"
-        subprocess.run([*cc, *_CFLAGS, str(_CORE_DIR / "gavel.c"), "-o", str(so_path)], check=True)
-        # Loading inside the with-block is fine: on Linux the mapping keeps the
-        # ELF alive after the file is deleted, so nothing leaks into /tmp.
-        lib = ctypes.CDLL(str(so_path))
+def _load_lib() -> ctypes.CDLL:
+    """Load the library under test, compiling the core when none is supplied."""
+    prebuilt = os.environ.get("GAVEL_LIBRARY")
+    if prebuilt:
+        # Resolved to absolute: dlopen reads a name without a slash as a library
+        # to search for on the system paths, not as a file next to the caller.
+        path = Path(prebuilt).resolve()
+        # Never a fall back to compiling. The caller believes it is judging that
+        # artifact, and a silent recompile would hand back a pass for bytes
+        # nothing ever ran.
+        if not path.is_file():
+            raise FileNotFoundError(f"GAVEL_LIBRARY points at {path}, which is not a file")
+        lib = ctypes.CDLL(str(path))
+    else:
+        cc = shlex.split(os.environ.get("CC", "cc"))
+        with tempfile.TemporaryDirectory(prefix="gavel-core-table-") as tmpdir:
+            so_path = Path(tmpdir) / "libgavel.so"
+            subprocess.run([*cc, *_CFLAGS, str(_CORE_DIR / "gavel.c"), "-o", str(so_path)], check=True)
+            # Loading inside the with-block is fine: on Linux the mapping keeps
+            # the ELF alive after the file is deleted, so nothing leaks in /tmp.
+            lib = ctypes.CDLL(str(so_path))
     lib.gavel_compute_sync_action.argtypes = [
         ctypes.POINTER(LocalFile),
         ctypes.POINTER(ServerSave),
@@ -100,7 +115,7 @@ def _compile_lib() -> ctypes.CDLL:
     return lib
 
 
-_LIB = _compile_lib()
+_LIB = _load_lib()
 
 
 def _encode(value: str | None) -> bytes | None:
