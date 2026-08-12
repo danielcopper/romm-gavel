@@ -8,6 +8,9 @@ Alongside them sit tests for the input shapes no vector can express, because the
 shape validator rejects them: a local file object with no fields, a server save
 with no ``device_syncs`` key, a size that is not a whole number. Those are the
 marshalling decisions this layer owns, and nothing else would catch them.
+
+Library selection matches the other harnesses: ``$CC`` compiles the core, or
+``$GAVEL_LIBRARY`` names an already-built ``.so`` to hand the binding instead.
 """
 
 from __future__ import annotations
@@ -36,8 +39,19 @@ from gavel_native import GavelCore  # noqa: E402
 sys.path.remove(str(_REPO_ROOT / "bindings" / "python"))
 
 
-def _build_core() -> GavelCore:
-    """Compile the core with ``$CC`` and hand the library to the binding."""
+def _load_core() -> GavelCore:
+    """Hand the binding the library under test, compiling one when none is supplied."""
+    prebuilt = os.environ.get("GAVEL_LIBRARY")
+    if prebuilt:
+        # Resolved to absolute: dlopen reads a name without a slash as a library
+        # to search for on the system paths, not as a file next to the caller.
+        path = Path(prebuilt).resolve()
+        # Never a fall back to compiling. The caller believes it is judging that
+        # artifact, and a silent recompile would hand back a pass for bytes
+        # nothing ever ran.
+        if not path.is_file():
+            raise FileNotFoundError(f"GAVEL_LIBRARY points at {path}, which is not a file")
+        return GavelCore(path)
     cc = shlex.split(os.environ.get("CC", "cc"))
     with tempfile.TemporaryDirectory(prefix="gavel-binding-table-") as tmpdir:
         so_path = Path(tmpdir) / "libgavel.so"
@@ -47,7 +61,7 @@ def _build_core() -> GavelCore:
         return GavelCore(so_path)
 
 
-_CORE = _build_core()
+_CORE = _load_core()
 
 
 def _load_vectors() -> list[object]:
