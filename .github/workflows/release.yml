@@ -97,7 +97,12 @@ jobs:
         # is left out on purpose: it never loads a library.
         env:
           GAVEL_LIBRARY: ${{ github.workspace }}/libgavel-x86_64-linux.so
-        run: python -m pytest core/tests bindings/python/tests -q
+        run: |
+          # Losing the env block above would not turn this step red: the
+          # harnesses would compile a library of their own and pass, under a
+          # step name claiming the artifact had been judged. Refuse instead.
+          test -n "$GAVEL_LIBRARY"
+          python -m pytest core/tests bindings/python/tests -q
 
       - name: Checksum and attach to the release
         env:
