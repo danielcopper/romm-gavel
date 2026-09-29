@@ -96,16 +96,88 @@ jobs:
             exit 1
           fi
 
+  # A fork's PR only: sonarcloud-fork-pr.yml reads the PR number from this
+  # artifact and checks it against the API.
+  pr-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    steps:
+      - name: Record the PR number
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          mkdir pr-metadata
+          echo "$PR_NUMBER" > pr-metadata/pr-number
+
+      - name: Upload PR metadata artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-metadata
+          path: pr-metadata/
+
+  # A fork's PR only: the coverage sonarcloud-fork-pr.yml hands the scanner,
+  # which executes nothing from the fork and so cannot produce it itself. The
+  # same two runs the `sonarcloud` job makes for its own scan, one report per
+  # language.
+  fork-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Produce C coverage
+        run: |
+          mkdir -p build/cov build/gcov
+          cc --coverage -std=c99 -O0 -g -c core/gavel.c -o build/cov/gavel.o
+          cc --coverage -std=c99 -O0 -g -c core/tests/exhaustive_driver.c -o build/cov/exhaustive.o
+          cc --coverage -std=c99 -O0 -g -c core/tests/decision_table_driver.c -o build/cov/table.o
+          cc --coverage build/cov/gavel.o build/cov/exhaustive.o -o build/cov/exhaustive
+          cc --coverage build/cov/gavel.o build/cov/table.o -o build/cov/table
+          ./build/cov/exhaustive
+          ./build/cov/table
+          gcov -o build/cov core/gavel.c
+          mv gavel.c.gcov build/gcov/
+
+      - name: Produce Python coverage
+        run: |
+          pip install --only-binary :all: -r requirements-ci.txt
+          python -m pytest reference/tests core/tests bindings/python/tests \
+            --cov --cov-report=xml -q
+
+      - name: Upload C coverage artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: gcov-reports
+          path: build/gcov/
+
+      - name: Upload Python coverage artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  # Runs on every push to main and every pull request whose head is a branch of
+  # this repository, Dependabot's included: a Dependabot PR's run reads
+  # SONAR_TOKEN from the repository's Dependabot secrets rather than its Actions
+  # secrets, so the token is stored in both. A fork's run gets no secrets, so a
+  # fork's PR is skipped here and scanned by sonarcloud-fork-pr.yml once CI has
+  # succeeded, using the coverage from `fork-coverage` and the PR number in
+  # `pr-metadata`.
   sonarcloud:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # SONAR_TOKEN does not reach Dependabot or forked-PR runs, so the scan can
-    # only fail there. Skipped rather than failed; `sonar-gate` below is what
-    # branch protection requires.
     if: >-
-      github.actor != 'dependabot[bot]' &&
-      (github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository)
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v7
         with:
@@ -149,18 +221,19 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  # Branch-protection shim: `sonarcloud` is skipped on Dependabot and forked
-  # PRs, and a skipped required check never reports success — which would
-  # deadlock exactly those PRs. This job always reports: it passes when the scan
-  # succeeded or was skipped, and fails only when the scan failed. Make THIS the
-  # required status check, not `sonarcloud`.
+  # The required check that carries the `sonarcloud` job's verdict. It always
+  # reports: it passes when the scan succeeded or was skipped, and fails only
+  # when the scan failed. On a fork's PR `sonarcloud` is skipped, so this gate
+  # says nothing about the analysis there: that verdict is only in the
+  # SonarCloud app's own check, `SonarCloud Code Analysis`, which the app posts
+  # once sonarcloud-fork-pr.yml's scan has run.
   sonar-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [sonarcloud]
     if: always()
     steps:
-      - name: Require the scan to pass (skipped on Dependabot / forked PRs)
+      - name: Require the scan to pass (skipped on a fork's PR)
         env:
           SONAR_RESULT: ${{ needs.sonarcloud.result }}
         run: |
