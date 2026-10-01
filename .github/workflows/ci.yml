@@ -172,6 +172,12 @@ jobs:
   # fork's PR is skipped here and scanned by sonarcloud-fork-pr.yml once CI has
   # succeeded, using the coverage from `fork-coverage` and the PR number in
   # `pr-metadata`.
+  #
+  # A failed quality gate blocks the merge through `SonarCloud Code Analysis`,
+  # the SonarCloud app's own check, which main's ruleset requires. The app
+  # posts it only once an analysis has run — this job's on a branch's PR,
+  # sonarcloud-fork-pr.yml's on a fork's — so a scan that never analysed leaves
+  # the required check unreported, which blocks as well.
   sonarcloud:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -216,29 +222,7 @@ jobs:
         # C is analysed in AutoConfig mode — the CI default, no build wrapper
         # and no compilation database. The scanner waits on the quality gate
         # (sonar.qualitygate.wait) and exits non-zero when it fails, so this
-        # job's own result is the verdict.
+        # job fails with the gate too, beside the app's check.
         uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-  # The required check that carries the `sonarcloud` job's verdict. It always
-  # reports: it passes when the scan succeeded or was skipped, and fails only
-  # when the scan failed. On a fork's PR `sonarcloud` is skipped, so this gate
-  # says nothing about the analysis there: that verdict is only in the
-  # SonarCloud app's own check, `SonarCloud Code Analysis`, which the app posts
-  # once sonarcloud-fork-pr.yml's scan has run.
-  sonar-gate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    needs: [sonarcloud]
-    if: always()
-    steps:
-      - name: Require the scan to pass (skipped on a fork's PR)
-        env:
-          SONAR_RESULT: ${{ needs.sonarcloud.result }}
-        run: |
-          echo "sonarcloud job result: $SONAR_RESULT"
-          if [ "$SONAR_RESULT" = "failure" ] || [ "$SONAR_RESULT" = "cancelled" ]; then
-            echo "::error::SonarQube Cloud did not pass"
-            exit 1
-          fi
