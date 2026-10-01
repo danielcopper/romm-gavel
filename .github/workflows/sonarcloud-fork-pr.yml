@@ -16,9 +16,11 @@ name: SonarCloud fork PRs
 # sonar-project.properties names no compilation database and no build-wrapper
 # output, so no compiler or build command the fork names is run either.
 #
-# The coverage reports, and the CI success that starts this workflow, come from
-# the fork's own copy of ci.yml, so all of them can be forged: on a fork's PR
-# the Sonar verdict informs the review; it does not replace it.
+# On a fork's PR, this scan's analysis is what the required check reports; the
+# comment on ci.yml's `sonarcloud` job says which check that is and when it
+# blocks. The coverage reports, and the CI success that starts this workflow,
+# come from the fork's own copy of ci.yml, so all of them can be forged: a
+# passing verdict on a fork's PR informs the review; it does not replace it.
 
 on:
   workflow_run:
