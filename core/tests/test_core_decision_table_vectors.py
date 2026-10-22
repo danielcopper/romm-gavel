@@ -60,6 +60,8 @@ class LocalFile(ctypes.Structure):
         ("has_mtime", ctypes.c_int),
         ("content_size", ctypes.c_int64),
         ("has_content_size", ctypes.c_int),
+        ("size_fixed", ctypes.c_int),
+        ("has_size_fixed", ctypes.c_int),
     )
 
 
@@ -154,6 +156,7 @@ def call_core(inputs: dict[str, Any]) -> dict[str, Any]:
         size = local_file.get("size")
         mtime = local_file.get("mtime")
         content_size = local_file.get("content_size")
+        size_fixed = local_file.get("size_fixed")
         c_local_file = ctypes.pointer(
             LocalFile(
                 size=int(size) if size is not None else 0,
@@ -162,6 +165,8 @@ def call_core(inputs: dict[str, Any]) -> dict[str, Any]:
                 has_mtime=int(mtime is not None),
                 content_size=int(content_size) if content_size is not None else 0,
                 has_content_size=int(content_size is not None),
+                size_fixed=int(bool(size_fixed)),
+                has_size_fixed=int(size_fixed is not None),
             )
         )
 

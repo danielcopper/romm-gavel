@@ -40,19 +40,36 @@ def _below_half(value: int, baseline: int | None) -> bool:
     return value < baseline * SHRINK_RATIO
 
 
+def _fixed_size_shrunken(new_size: int | None, baseline_size: int | None, baseline_content_size: int | None) -> bool:
+    """A fixed-size file never legitimately loses content: below what it held at the last sync is a truncated write.
+
+    What it held is the recorded content size where one is recorded, so a
+    shortening that drops only trailing fill loses nothing; otherwise the
+    recorded raw size.
+    """
+    if new_size is None:
+        return False
+    held = baseline_content_size if baseline_content_size is not None else baseline_size
+    return held is not None and new_size < held
+
+
 def is_implausibly_shrunken(
     new_size: int | None,
     baseline_size: int | None,
     new_content_size: int | None,
     baseline_content_size: int | None,
+    size_fixed: bool | None,
 ) -> bool:
     """A 0-byte file is never a plausible edit; below half the recorded size is a truncated write.
 
     Where both content sizes are known, they are what is halved, so a file that
     dropped only trailing fill is not read as shrunken. The 0-byte rule stays on
-    the raw size.
+    the raw size. A file whose size is fixed is also shrunken below what it held
+    at the last sync; that rule comes in addition, never instead.
     """
     if new_size == 0:
+        return True
+    if size_fixed and _fixed_size_shrunken(new_size, baseline_size, baseline_content_size):
         return True
     if new_content_size is not None and baseline_content_size is not None:
         return _below_half(new_content_size, baseline_content_size)
@@ -122,7 +139,11 @@ def _decide_when_is_current(
         return _conflict(head)
     if local_hash and local_hash != last_sync_hash:
         if is_implausibly_shrunken(
-            local_file.get("size"), last_sync_local_size, local_file.get("content_size"), last_sync_content_size
+            local_file.get("size"),
+            last_sync_local_size,
+            local_file.get("content_size"),
+            last_sync_content_size,
+            local_file.get("size_fixed"),
         ):
             return _conflict(head)
         return _upload(head.get("id"))

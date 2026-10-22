@@ -6,8 +6,9 @@ vector the way the contract says.
 
 Alongside them sit tests for the input shapes no vector can express, because the
 shape validator rejects them: a local file object with no fields, a server save
-with no ``device_syncs`` key, a size that is not a whole number. Those are the
-marshalling decisions this layer owns, and nothing else would catch them.
+with no ``device_syncs`` key, a size that is not a whole number, a ``size_fixed``
+that is not a bool. Those are the marshalling decisions this layer owns, and
+nothing else would catch them.
 
 Library selection matches the other harnesses: ``$CC`` compiles the core, or
 ``$GAVEL_LIBRARY`` names an already-built ``.so`` to hand the binding instead.
@@ -203,3 +204,18 @@ def test_a_non_integral_content_size_is_refused(field: str):
 
     with pytest.raises(ValueError, match="whole number of bytes"):
         _CORE.compute_sync_action(local_file, [], files_state, _DEVICE, _HASH)
+
+
+@pytest.mark.parametrize("value", [1, 0, "false", 1.0])
+def test_a_non_bool_size_fixed_is_refused(value: object):
+    """Whether the size is fixed is true, false or absent; anything else raises.
+
+    Read by truthiness, ``"false"`` would mark the file fixed and ``0`` would
+    state "not fixed" where the caller may have meant nothing at all. The guard
+    reads the answer as a fact about the file, so a value that only resembles
+    one raises rather than being guessed into one.
+    """
+    local_file: dict[str, Any] = {"filename": "game.srm", "size": 8192, "size_fixed": value, "mtime": _HEAD_EPOCH}
+
+    with pytest.raises(ValueError, match="true, false or absent"):
+        _CORE.compute_sync_action(local_file, [], {}, _DEVICE, _HASH)

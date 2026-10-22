@@ -742,6 +742,344 @@
       }
     },
     {
+      "name": "current-diverged-fixed-size-truncated",
+      "rationale": "A save whose size the format fixes, 32768 bytes at the last sync, is now 20480 bytes, its content cut with it. That is within half of what was recorded, so the half rule lets it through. A fixed-size file never legitimately loses content; it can get shorter only by dropping trailing fill. Its raw size is below the 32768 bytes of content recorded at the last sync, so it is a truncated write. Never auto-upload it.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 20480,
+          "content_size": 20480,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 32768
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-size-not-fixed-truncated",
+      "rationale": "The same shortening as current-diverged-fixed-size-truncated, but the caller states that the size is not fixed: the file may legitimately get shorter. Only the half rule applies, and 20480 is not below half of 32768.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 20480,
+          "content_size": 20480,
+          "size_fixed": false,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 32768
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-size-fixed-unknown-truncated",
+      "rationale": "The same shortening as current-diverged-fixed-size-truncated, but the caller does not know whether the size is fixed and leaves size_fixed out. Unknown is not fixed: only the half rule applies, and 20480 is not below half of 32768.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 20480,
+          "content_size": 20480,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 32768
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fixed-size-fill-dropped",
+      "rationale": "current-diverged-fill-dropped on a file stated fixed: mGBA's 131072 bytes of 0xFF, recorded with content size 0, give way to the real 32768-byte save. The fixed rule compares the raw size with the content recorded at the last sync, and 32768 is not below 0: what the file lost was fill.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 32768,
+          "content_size": 32768,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 131072,
+          "last_sync_content_size": 0
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fixed-size-trailing-fill-dropped",
+      "rationale": "A fixed-size file went from 32768 to 20480 bytes, but the content recorded at the last sync was 16384 bytes and the raw size is not below it: what the file lost was trailing fill. The fixed rule compares against the recorded content, not the recorded raw size, so a shortening that drops only fill loses nothing and does not trip it.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 20480,
+          "content_size": 16384,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 16384
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fixed-size-no-content-recorded",
+      "rationale": "The record of the last sync holds no content size, so the fixed rule compares against the recorded raw size: 30000 is below 32768. The half rule alone would let it through.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 30000,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fixed-size-blank-save",
+      "rationale": "current-diverged-blank-save on a file stated fixed: full size, fill only, where the recorded content was 24576 bytes. The fixed rule sees no shortening, since 32768 is not below 24576. The half rule on the content sizes applies to a fixed-size file all the same and refuses it: the fixed rule comes in addition, so a fixed-size file is never guarded more weakly than one whose size can change.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 32768,
+          "content_size": 0,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 24576
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fixed-size-raw-size-unknown",
+      "rationale": "The file is stated fixed, but its raw size could not be read. The fixed rule has nothing to compare and does not fire; an unknown size is not 0. Both sides state a content size, so the half rule compares those, and 20480 is not below half of 32768.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "content_size": 20480,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 32768
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
+      "name": "current-diverged-fixed-size-unchanged-size",
+      "rationale": "An ordinary edit of a fixed-size save: the size is what it was at the last sync. Not below is not shrunken, so it uploads.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 32768,
+          "content_size": 32768,
+          "size_fixed": true,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "last_sync_server_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_local_size": 32768,
+          "last_sync_content_size": 32768
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "upload",
+        "target_save_id": 101
+      }
+    },
+    {
       "name": "current-hash-unknown",
       "rationale": "Current on the head with a baseline recorded, but the local hash could not be computed: without it drift from the baseline cannot be claimed \u2014 treat as in sync rather than guessing.",
       "input": {

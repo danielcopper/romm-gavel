@@ -84,6 +84,8 @@ class _LocalFile(ctypes.Structure):
         ("has_mtime", ctypes.c_int),
         ("content_size", ctypes.c_int64),
         ("has_content_size", ctypes.c_int),
+        ("size_fixed", ctypes.c_int),
+        ("has_size_fixed", ctypes.c_int),
     )
 
 
@@ -136,6 +138,21 @@ def _optional_size(value: object, field: str) -> tuple[int, int]:
     if isinstance(value, int) or (isinstance(value, float) and value.is_integer()):
         return int(value), 1
     raise ValueError(f"{field} must be a whole number of bytes, got {value!r}")
+
+
+def _optional_flag(value: object, field: str) -> tuple[int, int]:
+    """A dict value → the core's ``(flag, has_flag)`` pair, for a yes/no fact.
+
+    Only a ``bool`` states the fact. Anything else would have to be read as yes
+    or no by a guess — ``"false"`` is truthy, and ``1`` passes for ``True`` only
+    by accident of ``bool`` subclassing ``int`` — so it raises instead. Absent
+    stays absent: unknown.
+    """
+    if value is None:
+        return 0, 0
+    if isinstance(value, bool):
+        return int(value), 1
+    raise ValueError(f"{field} must be true, false or absent, got {value!r}")
 
 
 class GavelCore:
@@ -244,6 +261,7 @@ def _build_local_file(local_file: dict[str, Any] | None) -> Any:
     size, has_size = _optional_size(local_file.get("size"), "local_file.size")
     mtime, has_mtime = _optional_timestamp(local_file.get("mtime"))
     content_size, has_content_size = _optional_size(local_file.get("content_size"), "local_file.content_size")
+    size_fixed, has_size_fixed = _optional_flag(local_file.get("size_fixed"), "local_file.size_fixed")
     return ctypes.pointer(
         _LocalFile(
             size=size,
@@ -252,6 +270,8 @@ def _build_local_file(local_file: dict[str, Any] | None) -> Any:
             has_mtime=has_mtime,
             content_size=content_size,
             has_content_size=has_content_size,
+            size_fixed=size_fixed,
+            has_size_fixed=has_size_fixed,
         )
     )
 
