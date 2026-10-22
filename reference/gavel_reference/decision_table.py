@@ -55,8 +55,24 @@ def _local_mtime_ge_head(local_file: dict[str, Any], head: dict[str, Any]) -> bo
     return local_mtime >= head_epoch
 
 
-def _skip(reason: str, adopt_baseline: bool = False) -> dict[str, Any]:
-    return {"action": "skip", "reason": reason, "adopt_baseline": adopt_baseline}
+def _skip(reason: str) -> dict[str, Any]:
+    return {"action": "skip", "reason": reason, "adopt_baseline": False}
+
+
+def _adopt(head: dict[str, Any], acknowledge: bool) -> dict[str, Any]:
+    """Skip, adopting the local file as the baseline for *head*.
+
+    ``acknowledge`` is set when the device's entry on that head says
+    ``is_current=false``, so the client must tell the server it synced it
+    (SPEC.md — Bookkeeping).
+    """
+    return {
+        "action": "skip",
+        "reason": "synced",
+        "adopt_baseline": True,
+        "server_save_id": head["id"],
+        "acknowledge": acknowledge,
+    }
 
 
 def _upload(target_save_id: int | None) -> dict[str, Any]:
@@ -84,7 +100,7 @@ def _decide_when_is_current(
         return _download(head)
     if not last_sync_hash:
         if local_matches_server(local_hash, head.get("content_hash"), last_sync_hash, last_sync_server_hash):
-            return _skip("synced", adopt_baseline=True)
+            return _adopt(head, acknowledge=False)
         return _conflict(head)
     if local_hash and local_hash != last_sync_hash:
         if is_implausibly_shrunken(local_file.get("size"), last_sync_local_size):
@@ -100,16 +116,12 @@ def _decide_when_not_current(
     last_sync_hash: str | None,
     last_sync_server_hash: str | None,
 ) -> dict[str, Any]:
-    """The server head moved past this device."""
+    """The server does not hold this device as current on the head."""
     if local_file is None:
         return _download(head)
-    if not last_sync_hash:
-        if local_matches_server(local_hash, head.get("content_hash"), last_sync_hash, last_sync_server_hash):
-            return _download(head)
-        return _conflict(head)
-    if local_hash and local_hash != last_sync_hash:
-        if local_matches_server(local_hash, head.get("content_hash"), last_sync_hash, last_sync_server_hash):
-            return _download(head)
+    if local_matches_server(local_hash, head.get("content_hash"), last_sync_hash, last_sync_server_hash):
+        return _adopt(head, acknowledge=True)
+    if not last_sync_hash or (local_hash and local_hash != last_sync_hash):
         return _conflict(head)
     return _download(head)
 
@@ -121,11 +133,11 @@ def _decide_when_no_entry(
     last_sync_hash: str | None,
     last_sync_server_hash: str | None,
 ) -> dict[str, Any]:
-    """This device never touched the chosen head."""
+    """The listing carries no entry for this device."""
     if local_file is None:
         return _download(head)
     if local_matches_server(local_hash, head.get("content_hash"), last_sync_hash, last_sync_server_hash):
-        return _skip("synced", adopt_baseline=True)
+        return _adopt(head, acknowledge=False)
     if last_sync_hash and local_hash and local_hash != last_sync_hash:
         return _conflict(head)
     if not last_sync_hash and local_hash:

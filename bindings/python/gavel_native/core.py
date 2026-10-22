@@ -102,6 +102,7 @@ class _SyncAction(ctypes.Structure):
         ("target_save_id", ctypes.c_int64),
         ("has_target_save_id", ctypes.c_int),
         ("server_save_id", ctypes.c_int64),
+        ("acknowledge", ctypes.c_int),
     )
 
 
@@ -304,11 +305,17 @@ def _decode_action(result: _SyncAction) -> dict[str, Any]:
     """The C result struct → the vector dialect's tagged dict."""
     action = _ACTIONS[result.action]
     if action == "skip":
-        return {
+        decoded: dict[str, Any] = {
             "action": "skip",
             "reason": _SKIP_REASONS[result.reason],
             "adopt_baseline": bool(result.adopt_baseline),
         }
+        # Only an adopting skip names a head, and only it can ask for an
+        # acknowledgement; on any other skip both fields are 0.
+        if result.adopt_baseline:
+            decoded["server_save_id"] = result.server_save_id
+            decoded["acknowledge"] = bool(result.acknowledge)
+        return decoded
     if action == "upload":
         return {
             "action": "upload",

@@ -46,6 +46,15 @@ Rules:
   identity anchor and survives any drift between the client's hashing and the server's scheme.
 - A value the client could not obtain is recorded as absent, never as an empty string. Absent means "unknown", and
   unknown never proves anything (see the identity check).
+- Adopting a head this device is not current on is a sync boundary for the server as well: the client MUST acknowledge
+  it to the server as synced. On RomM that is `POST /api/saves/{id}/downloaded` with the `device_id`, which records the
+  device's sync row for that save without a transfer. Without it the server keeps the device not current on the head,
+  and the next local change reads as a local edit under a head that moved past it — a conflict no other device caused.
+  The decision table marks this case (see its result fields).
+- Such an adoption is a successful boundary only once the server has confirmed the acknowledgement: the client records
+  the new baseline after the acknowledgement succeeded, never before. A failed acknowledgement leaves the previous
+  record untouched, and with nothing else changed the next run decides the same way again — adopt and acknowledge, no
+  transfer.
 - A server-side per-device baseline, if RomM ships one, is an alternative **source** for these values — not a rule
   change.
 
@@ -129,18 +138,18 @@ The reference client's full model — one decision per `(rom, filename, slot)`:
 | present    | diverged, local implausibly shrunken | —                | conflict (corrupt-local guard, invariant I3) |
 | present    | diverged                             | —                | upload (`overwrite=false`; a 409 → ladder)   |
 
-**`is_current=false`** — the server head moved past this device:
+**`is_current=false`** — the server does not hold this device as current on the head: the head moved past it, or (on
+RomM with a `device_id`) it never synced this save:
 
-| Local file | Baseline  | Identity vs head | Action                                         |
-| ---------- | --------- | ---------------- | ---------------------------------------------- |
-| absent     | —         | —                | download                                       |
-| present    | none      | match            | download (harmless, re-anchors baseline)       |
-| present    | none      | no match         | conflict (unknown provenance)                  |
-| present    | unchanged | —                | download                                       |
-| present    | diverged  | match            | download (both moves landed on the same bytes) |
-| present    | diverged  | no match         | conflict (true two-sided divergence)           |
+| Local file | Baseline  | Identity vs head | Action                                                             |
+| ---------- | --------- | ---------------- | ------------------------------------------------------------------ |
+| absent     | —         | —                | download                                                           |
+| present    | —         | match            | skip + adopt baseline + acknowledge (identical bytes never travel) |
+| present    | none      | no match         | conflict (unknown provenance)                                      |
+| present    | unchanged | no match         | download                                                           |
+| present    | diverged  | no match         | conflict (true two-sided divergence)                               |
 
-**no entry** — this device never touched the chosen save:
+**no entry** — the listing carries no entry for this device (on RomM: a listing sent without a `device_id`):
 
 | Local file | Baseline                  | Identity vs head | Action                                               |
 | ---------- | ------------------------- | ---------------- | ---------------------------------------------------- |
@@ -149,6 +158,16 @@ The reference client's full model — one decision per `(rom, filename, slot)`:
 | present    | held, diverged            | no match         | conflict (mirrors `is_current=false`)                |
 | present    | none, hash known          | no match         | conflict (unknown provenance, both mtime directions) |
 | present    | unchanged or hash unknown | —                | mtime ≥ server `updated_at` → upload, else download  |
+
+Why a `device_id` keeps a RomM listing out of this branch: with one, every save in a RomM 5.x listing carries an entry
+for the caller; where RomM holds no sync row for the device, that entry is synthesized: `is_current: false`,
+`last_synced_at` set to the save's `updated_at`, and not stored (`backend/endpoints/saves.py`, `_build_save_schema`).
+
+A skip that adopts a baseline names the head it adopted (`server_save_id`, the chosen head) and says whether the client
+must acknowledge that head to the server (`acknowledge`, see Bookkeeping). `acknowledge` is set exactly on the adoption
+in the `is_current=false` branch: in the `is_current=true` branch the device is already current, and with no entry the
+listing reports no currency for this device, so there is nothing it says to correct (on RomM the listing was sent
+without a `device_id`, the id the acknowledgement needs). A skip that adopts nothing names no head.
 
 Notes:
 
