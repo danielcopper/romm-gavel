@@ -176,7 +176,9 @@
       "expected": {
         "action": "skip",
         "reason": "synced",
-        "adopt_baseline": true
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": false
       }
     },
     {
@@ -477,7 +479,7 @@
     },
     {
       "name": "moved-past-no-baseline-parity",
-      "rationale": "Head moved past, local present without a baseline, but byte-identical to the head (parity \u2014 the only identity route without history): adopting loses nothing and re-anchors the baseline.",
+      "rationale": "Device not current on the head (moved past, or on RomM never synced), local present without a baseline, but byte-identical to the head (parity \u2014 the only identity route without history): identical bytes never travel \u2014 adopt the local file as the baseline instead of downloading the same content again. The server still holds this device not current on the head, so the result asks for an acknowledgement.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -502,8 +504,11 @@
         "local_hash": "cccccccccccccccccccccccccccccccc"
       },
       "expected": {
-        "action": "download",
-        "server_save_id": 101
+        "action": "skip",
+        "reason": "synced",
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": true
       }
     },
     {
@@ -539,7 +544,7 @@
     },
     {
       "name": "moved-past-unchanged",
-      "rationale": "Head moved past but local is unchanged since the baseline: this device holds no un-synced work \u2014 adopt the head.",
+      "rationale": "Head moved past, local unchanged since the baseline and not identical to the head: this device holds no un-synced work \u2014 download the head.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -572,8 +577,82 @@
       }
     },
     {
+      "name": "moved-past-unchanged-provenance",
+      "rationale": "PROVENANCE route on a moved head: local unchanged since the baseline AND the stored server hash equals the head's content_hash \u2014 the head moved to the very content this device last synced, proven by two server-produced hashes even though the local hash differs from the head's. Identical bytes never travel \u2014 adopt, no download. The server still holds this device not current on the head, so the result asks for an acknowledgement.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 8192,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": false
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "last_sync_server_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        },
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "skip",
+        "reason": "synced",
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": true
+      }
+    },
+    {
+      "name": "moved-past-unchanged-parity",
+      "rationale": "PARITY route on a moved head with the local file unchanged since its baseline: the stored server hash differs from the head's, but the local hash equals the head's content_hash directly. Identical bytes never travel \u2014 adopt, no download. The server still holds this device not current on the head, so the result asks for an acknowledgement.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 8192,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": false
+              }
+            ]
+          }
+        ],
+        "files_state": {
+          "last_sync_hash": "cccccccccccccccccccccccccccccccc",
+          "last_sync_server_hash": "dddddddddddddddddddddddddddddddd"
+        },
+        "device_id": "device-a",
+        "local_hash": "cccccccccccccccccccccccccccccccc"
+      },
+      "expected": {
+        "action": "skip",
+        "reason": "synced",
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": true
+      }
+    },
+    {
       "name": "moved-past-diverged-identical",
-      "rationale": "Both sides moved independently but landed on the SAME bytes: nothing to reconcile \u2014 adopt, which re-establishes baseline and currency.",
+      "rationale": "Both sides moved independently but landed on the SAME bytes: nothing to reconcile and nothing to transfer \u2014 adopt the local file as the baseline. The server still holds this device not current on the head, so the result asks for an acknowledgement.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -601,8 +680,11 @@
         "local_hash": "cccccccccccccccccccccccccccccccc"
       },
       "expected": {
-        "action": "download",
-        "server_save_id": 101
+        "action": "skip",
+        "reason": "synced",
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": true
       }
     },
     {
@@ -675,7 +757,7 @@
     },
     {
       "name": "never-synced-local-gone",
-      "rationale": "Never synced this head and no local file \u2014 adopt the head.",
+      "rationale": "No entry for this device on the head and no local file \u2014 adopt the head.",
       "input": {
         "local_file": null,
         "server_saves_in_slot": [
@@ -702,7 +784,7 @@
     },
     {
       "name": "never-synced-parity-dedup",
-      "rationale": "Local content is byte-identical to a head this device never synced (parity route): adopt it as the baseline instead of POSTing a duplicate.",
+      "rationale": "Local content is byte-identical to a head that carries no entry for this device (parity route): adopt it as the baseline instead of POSTing a duplicate.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -729,7 +811,9 @@
       "expected": {
         "action": "skip",
         "reason": "synced",
-        "adopt_baseline": true
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": false
       }
     },
     {
@@ -764,12 +848,14 @@
       "expected": {
         "action": "skip",
         "reason": "synced",
-        "adopt_baseline": true
+        "adopt_baseline": true,
+        "server_save_id": 101,
+        "acknowledge": false
       }
     },
     {
       "name": "never-synced-baseline-diverged",
-      "rationale": "Local diverged from its baseline while the chosen head is one this device never synced: both sides moved \u2014 conflict.",
+      "rationale": "Local diverged from its baseline while the chosen head carries no entry for this device: both sides moved \u2014 conflict.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -803,7 +889,7 @@
     },
     {
       "name": "never-synced-no-baseline-mtime-newer-still-conflicts",
-      "rationale": "No baseline, local hash known and NOT identical to the never-synced head: unknown provenance \u2014 conflict, even though the local mtime is newer. mtime never rescues this case.",
+      "rationale": "No baseline, local hash known and NOT identical to a head with no entry for this device: unknown provenance \u2014 conflict, even though the local mtime is newer. mtime never rescues this case.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -834,7 +920,7 @@
     },
     {
       "name": "never-synced-unchanged-mtime-newer",
-      "rationale": "Local provably unchanged since its baseline, head never synced and not identical (stored hash differs): fall through to the timestamp comparison \u2014 local at-or-after the head uploads as a new save.",
+      "rationale": "Local provably unchanged since its baseline, no entry for this device on the head and not identical (stored hash differs): fall through to the timestamp comparison \u2014 local at-or-after the head uploads as a new save.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -902,7 +988,7 @@
     },
     {
       "name": "never-synced-unchanged-mtime-older",
-      "rationale": "Local provably unchanged and older than the never-synced head \u2014 adopt the head.",
+      "rationale": "Local provably unchanged and older than a head with no entry for this device \u2014 adopt the head.",
       "input": {
         "local_file": {
           "filename": "game.srm",

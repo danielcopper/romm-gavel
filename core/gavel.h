@@ -174,7 +174,14 @@ typedef enum { GAVEL_SKIP_SYNCED = 0, GAVEL_SKIP_NOTHING_TO_SYNC = 1 } gavel_ski
  *
  *   GAVEL_ACTION_SKIP      → ``reason`` and ``adopt_baseline`` (nonzero means
  *                            the client should record the current local file as
- *                            its baseline for this server version)
+ *                            its baseline for this server version). When
+ *                            ``adopt_baseline`` is nonzero, also
+ *                            ``server_save_id``, always the chosen head, and
+ *                            ``acknowledge``: nonzero when the device's entry
+ *                            on that head says ``is_current=false``, so the
+ *                            client must tell the server it synced it (SPEC.md
+ *                            — "Bookkeeping").
+ *                            A skip that adopts nothing leaves both 0.
  *   GAVEL_ACTION_UPLOAD    → ``target_save_id`` when ``has_target_save_id`` is
  *                            nonzero: the save this upload supersedes. Clear
  *                            means there is no such save (a first upload into
@@ -193,6 +200,7 @@ typedef struct {
     int64_t target_save_id;
     int has_target_save_id;
     int64_t server_save_id;
+    int acknowledge;
 } gavel_sync_action;
 
 /* Compute the sync decision for a single (rom, filename, slot).

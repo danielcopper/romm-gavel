@@ -107,9 +107,9 @@ static void oracle_when_is_current(const oracle_facts *f, gavel_sync_action *out
     if (!f->present) {
         out->action = GAVEL_ACTION_DOWNLOAD;
     } else if (!f->has_baseline && f->identical) {
+        /* Already current on the head: nothing to acknowledge. */
         out->action = GAVEL_ACTION_SKIP;
         out->adopt_baseline = 1;
-        out->server_save_id = 0;
     } else if (!f->has_baseline) {
         /* No baseline and no identity with the head: unknown provenance. */
         out->action = GAVEL_ACTION_CONFLICT;
@@ -126,23 +126,28 @@ static void oracle_when_is_current(const oracle_facts *f, gavel_sync_action *out
     }
 }
 
-/* Row 3b — is_current=false: the head moved past this device. */
+/* Row 3b — is_current=false: the server does not hold this device as current on the head. */
 static void oracle_when_not_current(const oracle_facts *f, gavel_sync_action *out) {
-    if (f->present && (!f->has_baseline || f->diverged) && !f->identical) {
+    if (f->present && f->identical) {
+        /* The server still holds this device not current: acknowledge. */
+        out->action = GAVEL_ACTION_SKIP;
+        out->adopt_baseline = 1;
+        out->acknowledge = 1;
+    } else if (f->present && (!f->has_baseline || f->diverged)) {
         out->action = GAVEL_ACTION_CONFLICT;
     } else {
         out->action = GAVEL_ACTION_DOWNLOAD;
     }
 }
 
-/* Row 3c — no entry: this device never touched the chosen head. */
+/* Row 3c — no entry: the listing carries no entry for this device. */
 static void oracle_when_no_entry(const oracle_facts *f, gavel_sync_action *out) {
     if (!f->present) {
         out->action = GAVEL_ACTION_DOWNLOAD;
     } else if (f->identical) {
+        /* No entry: the listing reports no currency to correct. */
         out->action = GAVEL_ACTION_SKIP;
         out->adopt_baseline = 1;
-        out->server_save_id = 0;
     } else if (f->has_baseline && f->diverged) {
         /* Mirrors 3b: local moved and the head is not those bytes. */
         out->action = GAVEL_ACTION_CONFLICT;
@@ -346,18 +351,23 @@ static const char *well_formed(const gavel_sync_action *got) {
         if (got->reason != GAVEL_SKIP_SYNCED && got->reason != GAVEL_SKIP_NOTHING_TO_SYNC) {
             return "skip reason out of range";
         }
-        if (got->target_save_id != 0 || got->has_target_save_id != 0 || got->server_save_id != 0) {
-            return "skip carries save ids";
+        if (got->target_save_id != 0 || got->has_target_save_id != 0) {
+            return "skip carries upload fields";
+        }
+        /* Only an adopting skip names the head and may ask for an acknowledgement. */
+        if (got->adopt_baseline == 0 && (got->server_save_id != 0 || got->acknowledge != 0)) {
+            return "skip that adopts nothing carries a save id or an acknowledgement";
         }
         return NULL;
     case GAVEL_ACTION_UPLOAD:
-        if (got->reason != 0 || got->adopt_baseline != 0 || got->server_save_id != 0) {
+        if (got->reason != 0 || got->adopt_baseline != 0 || got->server_save_id != 0 || got->acknowledge != 0) {
             return "upload carries skip/download fields";
         }
         return NULL;
     case GAVEL_ACTION_DOWNLOAD:
     case GAVEL_ACTION_CONFLICT:
-        if (got->reason != 0 || got->adopt_baseline != 0 || got->target_save_id != 0 || got->has_target_save_id != 0) {
+        if (got->reason != 0 || got->adopt_baseline != 0 || got->target_save_id != 0 || got->has_target_save_id != 0 ||
+            got->acknowledge != 0) {
             return "download/conflict carries skip/upload fields";
         }
         return NULL;
@@ -369,7 +379,7 @@ static const char *well_formed(const gavel_sync_action *got) {
 static int actions_equal(const gavel_sync_action *a, const gavel_sync_action *b) {
     return a->action == b->action && a->reason == b->reason && a->adopt_baseline == b->adopt_baseline &&
            a->target_save_id == b->target_save_id && a->has_target_save_id == b->has_target_save_id &&
-           a->server_save_id == b->server_save_id;
+           a->server_save_id == b->server_save_id && a->acknowledge == b->acknowledge;
 }
 
 /* Every axis but the slot, as one counter: the digits of `n` are the fixture
@@ -401,12 +411,12 @@ static int check_combination(const gavel_server_save *saves, size_t save_count, 
     if (!actions_equal(&got, &want)) {
         fprintf(stderr,
                 "disagrees with oracle (slot=%zu local=%zu bk=%zu hash=%zu): "
-                "got action=%d reason=%d adopt=%d target=%lld/%d server=%lld; "
-                "want action=%d reason=%d adopt=%d target=%lld/%d server=%lld\n",
+                "got action=%d reason=%d adopt=%d target=%lld/%d server=%lld ack=%d; "
+                "want action=%d reason=%d adopt=%d target=%lld/%d server=%lld ack=%d\n",
                 slot_index, local_index, bk_index, hash_index, (int)got.action, (int)got.reason, got.adopt_baseline,
-                (long long)got.target_save_id, got.has_target_save_id, (long long)got.server_save_id, (int)want.action,
-                (int)want.reason, want.adopt_baseline, (long long)want.target_save_id, want.has_target_save_id,
-                (long long)want.server_save_id);
+                (long long)got.target_save_id, got.has_target_save_id, (long long)got.server_save_id, got.acknowledge,
+                (int)want.action, (int)want.reason, want.adopt_baseline, (long long)want.target_save_id,
+                want.has_target_save_id, (long long)want.server_save_id, want.acknowledge);
         return 0;
     }
     return 1;

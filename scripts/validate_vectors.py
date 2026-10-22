@@ -43,6 +43,12 @@ def fail(message: str) -> NoReturn:
     raise VectorError(message)
 
 
+def _is_save_id(value: Any) -> bool:
+    """A save id is an integer. ``bool`` subclasses ``int`` in Python, so
+    ``isinstance(True, int)`` holds and has to be excluded by name."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _hash_or_unknown(name: str, field: str, value: Any) -> None:
     if value is not None and not isinstance(value, str):
         fail(f"{name}: {field} must be a string or null")
@@ -78,7 +84,7 @@ def _validate_server_saves(name: str, saves: Any) -> None:
     if not isinstance(saves, list):
         fail(f"{name}: server_saves_in_slot must be a list")
     for save in saves:
-        if not isinstance(save, dict) or not isinstance(save.get("id"), int):
+        if not isinstance(save, dict) or not _is_save_id(save.get("id")):
             fail(f"{name}: every server save must be an object with an integer id")
         if not isinstance(save.get("updated_at"), str):
             fail(f"{name}: server save {save.get('id')}: updated_at must be a string")
@@ -98,16 +104,20 @@ def _validate_server_saves(name: str, saves: Any) -> None:
 def _check_skip_fields(name: str, expected: dict[str, Any]) -> None:
     if not isinstance(expected["reason"], str) or not isinstance(expected["adopt_baseline"], bool):
         fail(f"{name}: skip reason must be a string, adopt_baseline a bool")
+    if expected["adopt_baseline"] and (
+        not _is_save_id(expected["server_save_id"]) or not isinstance(expected["acknowledge"], bool)
+    ):
+        fail(f"{name}: an adopting skip's server_save_id must be an integer, acknowledge a bool")
 
 
 def _check_upload_fields(name: str, expected: dict[str, Any]) -> None:
     target_save_id = expected["target_save_id"]
-    if target_save_id is not None and not isinstance(target_save_id, int):
+    if target_save_id is not None and not _is_save_id(target_save_id):
         fail(f"{name}: upload target_save_id must be an integer or null")
 
 
 def _check_server_save_fields(name: str, expected: dict[str, Any]) -> None:
-    if not isinstance(expected["server_save_id"], int):
+    if not _is_save_id(expected["server_save_id"]):
         fail(f"{name}: {expected['action']} server_save_id must be an integer")
 
 
@@ -125,12 +135,26 @@ TABLE_EXPECTED_SHAPES = {
 # vector instead of failing with a shape message; keep the two in step.
 assert set(TABLE_EXPECTED_SHAPES) == TABLE_ACTIONS
 
+# A skip that adopts a baseline also names the head it adopted and whether the
+# client must acknowledge it to the server; a skip that adopts nothing carries
+# neither. Both keys are always present on an adopting skip, acknowledge
+# spelled false when not set.
+TABLE_ADOPT_FIELDS = {"server_save_id", "acknowledge"}
+
+
+def _table_expected_fields(action: str, expected: dict[str, Any]) -> set[str]:
+    fields, _ = TABLE_EXPECTED_SHAPES[action]
+    if action == "skip" and expected.get("adopt_baseline") is True:
+        return fields | TABLE_ADOPT_FIELDS
+    return fields
+
 
 def _validate_table_expected(name: str, expected: Any) -> None:
     if not isinstance(expected, dict) or expected.get("action") not in TABLE_ACTIONS:
         fail(f"{name}: expected.action must be one of {sorted(TABLE_ACTIONS)}")
     action = expected["action"]
-    fields, check_values = TABLE_EXPECTED_SHAPES[action]
+    _, check_values = TABLE_EXPECTED_SHAPES[action]
+    fields = _table_expected_fields(action, expected)
     if set(expected) != fields:
         fail(f"{name}: {action} expects exactly {'/'.join(sorted(fields))}")
     check_values(name, expected)

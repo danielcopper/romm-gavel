@@ -176,13 +176,23 @@ static void gavel_clear(gavel_sync_action *out) {
     out->target_save_id = 0;
     out->has_target_save_id = 0;
     out->server_save_id = 0;
+    out->acknowledge = 0;
 }
 
-static void gavel_set_skip(gavel_sync_action *out, gavel_skip_reason reason, int adopt_baseline) {
+static void gavel_set_skip(gavel_sync_action *out, gavel_skip_reason reason) {
     gavel_clear(out);
     out->action = GAVEL_ACTION_SKIP;
     out->reason = reason;
-    out->adopt_baseline = adopt_baseline;
+}
+
+/* Skip, adopting the local file as the baseline for ``head``. ``acknowledge``
+ * is set when the device's entry on that head says ``is_current=false``, so
+ * the client must tell the server it synced it (SPEC.md — "Bookkeeping"). */
+static void gavel_set_adopt(gavel_sync_action *out, const gavel_server_save *head, int acknowledge) {
+    gavel_set_skip(out, GAVEL_SKIP_SYNCED);
+    out->adopt_baseline = 1;
+    out->server_save_id = head->id;
+    out->acknowledge = acknowledge;
 }
 
 /* ``target`` is the save this upload supersedes, or NULL when there is none. */
@@ -222,7 +232,7 @@ static void gavel_decide_when_is_current(const gavel_server_save *head, const ga
      * it as the baseline. Anything else is unknown provenance. */
     if (!gavel_truthy(last_sync_hash)) {
         if (gavel_local_matches_server(local_hash, head->content_hash, last_sync_hash, last_sync_server_hash)) {
-            gavel_set_skip(out, GAVEL_SKIP_SYNCED, 1);
+            gavel_set_adopt(out, head, 0);
         } else {
             gavel_set_conflict(out, head);
         }
@@ -236,35 +246,37 @@ static void gavel_decide_when_is_current(const gavel_server_save *head, const ga
         gavel_set_upload(out, head);
         return;
     }
-    gavel_set_skip(out, GAVEL_SKIP_SYNCED, 0);
+    gavel_set_skip(out, GAVEL_SKIP_SYNCED);
 }
 
-/* Branch 2 — is_current=false: the server head moved past this device. */
+/* Branch 2 — is_current=false: the server does not hold this device as current
+ * on the head. */
 static void gavel_decide_when_not_current(const gavel_server_save *head, const gavel_local_file *local_file,
                                           const char *local_hash, const char *last_sync_hash,
                                           const char *last_sync_server_hash, gavel_sync_action *out) {
-    int identical;
-
     if (local_file == NULL) {
         gavel_set_download(out, head);
         return;
     }
-    /* With no baseline, provenance is unavailable and only byte-identity can
-     * justify adopting the head; a diverged local needs the same proof. */
+    /* In this branch, identical bytes never travel: whatever the baseline
+     * says, a local file proven identical to the head is adopted where it
+     * lies. */
+    if (gavel_local_matches_server(local_hash, head->content_hash, last_sync_hash, last_sync_server_hash)) {
+        gavel_set_adopt(out, head, 1);
+        return;
+    }
+    /* With no baseline, provenance is unavailable; a diverged local holds work
+     * of its own. Either way the head holds different bytes, and neither side
+     * may win silently. */
     if (!gavel_truthy(last_sync_hash) || gavel_diverged_from_baseline(local_hash, last_sync_hash)) {
-        identical = gavel_local_matches_server(local_hash, head->content_hash, last_sync_hash, last_sync_server_hash);
-        if (identical) {
-            gavel_set_download(out, head);
-        } else {
-            gavel_set_conflict(out, head);
-        }
+        gavel_set_conflict(out, head);
         return;
     }
     /* Unchanged since the baseline — nothing of this device's own to protect. */
     gavel_set_download(out, head);
 }
 
-/* Branch 3 — no entry: this device never touched the chosen head. */
+/* Branch 3 — no entry: the listing carries no entry for this device. */
 static void gavel_decide_when_no_entry(const gavel_server_save *head, const gavel_local_file *local_file,
                                        const char *local_hash, const char *last_sync_hash,
                                        const char *last_sync_server_hash, gavel_sync_action *out) {
@@ -273,7 +285,9 @@ static void gavel_decide_when_no_entry(const gavel_server_save *head, const gave
         return;
     }
     if (gavel_local_matches_server(local_hash, head->content_hash, last_sync_hash, last_sync_server_hash)) {
-        gavel_set_skip(out, GAVEL_SKIP_SYNCED, 1); /* don't POST a duplicate */
+        /* Don't POST a duplicate. The listing reports no currency for this
+         * device, so there is nothing to acknowledge. */
+        gavel_set_adopt(out, head, 0);
         return;
     }
     /* A diverged local mirrors the is_current=false branch; an unknown
@@ -307,7 +321,7 @@ void gavel_compute_sync_action(const gavel_local_file *local_file, const gavel_s
         if (local_file != NULL) {
             gavel_set_upload(out, NULL);
         } else {
-            gavel_set_skip(out, GAVEL_SKIP_NOTHING_TO_SYNC, 0);
+            gavel_set_skip(out, GAVEL_SKIP_NOTHING_TO_SYNC);
         }
         return;
     }

@@ -78,6 +78,7 @@ class SyncAction(ctypes.Structure):
         ("target_save_id", ctypes.c_int64),
         ("has_target_save_id", ctypes.c_int),
         ("server_save_id", ctypes.c_int64),
+        ("acknowledge", ctypes.c_int),
     )
 
 
@@ -212,7 +213,15 @@ def call_core(inputs: dict[str, Any]) -> dict[str, Any]:
 
     action = _ACTIONS[result.action]
     if action == "skip":
-        return {"action": action, "reason": _SKIP_REASONS[result.reason], "adopt_baseline": bool(result.adopt_baseline)}
+        decoded: dict[str, Any] = {
+            "action": action,
+            "reason": _SKIP_REASONS[result.reason],
+            "adopt_baseline": bool(result.adopt_baseline),
+        }
+        # Only an adopting skip names a head and can ask for an acknowledgement.
+        if result.adopt_baseline:
+            decoded |= {"server_save_id": result.server_save_id, "acknowledge": bool(result.acknowledge)}
+        return decoded
     if action == "upload":
         return {"action": action, "target_save_id": result.target_save_id if result.has_target_save_id else None}
     return {"action": action, "server_save_id": result.server_save_id}
