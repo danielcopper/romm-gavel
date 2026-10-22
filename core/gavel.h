@@ -130,12 +130,14 @@ typedef struct {
 
 /* The local file, when one exists.
  *
- * ``size`` and ``content_size`` back the corrupt-local guard (invariant I3) and
- * ``mtime`` (epoch seconds) the timestamp fall-through; each is optional.
- * ``content_size`` is the content size SPEC.md defines under "Inputs" (the size
- * less its trailing fill); the caller computes it. The filename is not a field:
- * it addresses which slot is being decided, and the decision itself never reads
- * it.
+ * ``size``, ``content_size`` and ``size_fixed`` back the corrupt-local guard
+ * (invariant I3) and ``mtime`` (epoch seconds) the timestamp fall-through; each
+ * is optional. ``content_size`` is the content size SPEC.md defines under
+ * "Inputs" (the size less its trailing fill); the caller computes it.
+ * ``size_fixed`` is nonzero when the file's size is fixed, as SPEC.md defines it
+ * under "Inputs", and 0 when it is not; with ``has_size_fixed`` clear it is
+ * unknown. The filename is not a field: it addresses which slot is being
+ * decided, and the decision itself never reads it.
  *
  * Presence is carried by the pointer alone, never by the flags: a struct with
  * every ``has_*`` flag clear is a file that exists and could not be measured,
@@ -148,6 +150,8 @@ typedef struct {
     int has_mtime;
     int64_t content_size;
     int has_content_size;
+    int size_fixed;
+    int has_size_fixed;
 } gavel_local_file;
 
 /* The client's bookkeeping record for this file (SPEC.md — "Bookkeeping").

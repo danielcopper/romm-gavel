@@ -86,6 +86,9 @@ def _validate_local_file(name: str, local_file: Any) -> None:
     for field in ("size", "content_size"):
         if not _is_size_or_unknown(local_file.get(field)):
             fail(f"{name}: local_file.{field} must be an integer or null")
+    # Unknown is spelled by leaving the key out, so null is no value here.
+    if "size_fixed" in local_file and not isinstance(local_file["size_fixed"], bool):
+        fail(f"{name}: local_file.size_fixed must be a bool or absent")
     mtime = local_file.get("mtime")
     if mtime is not None and not isinstance(mtime, int | float):
         fail(f"{name}: local_file.mtime must be a number or null")

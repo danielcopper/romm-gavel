@@ -110,19 +110,44 @@ static int gavel_below_half(int64_t value, int64_t baseline) {
     return value < baseline - value;
 }
 
+/* For a file whose size is fixed: is its raw size below what it held at the
+ * last sync boundary?
+ *
+ * Such a file never legitimately loses content; it can get shorter only by
+ * dropping trailing fill, so a shortfall below what it held is a truncated
+ * write. What it held is the recorded content size where one is recorded, and
+ * the recorded raw size otherwise. A plain comparison: no subtraction, so no
+ * value can overflow it. */
+static int gavel_fixed_size_shrunken(const gavel_local_file *local_file, const gavel_bookkeeping *bookkeeping) {
+    if (!local_file->has_size_fixed || !local_file->size_fixed || !local_file->has_size) {
+        return 0;
+    }
+    if (bookkeeping->has_last_sync_content_size) {
+        return local_file->size < bookkeeping->last_sync_content_size;
+    }
+    if (bookkeeping->has_last_sync_local_size) {
+        return local_file->size < bookkeeping->last_sync_local_size;
+    }
+    return 0;
+}
+
 /* The corrupt-local guard (invariant I3): is this file implausibly smaller than
  * it was at the last sync boundary?
  *
- * A 0-byte file is never a plausible edit, judged on the raw size. Below half
- * the recorded size means a truncated write: where both content sizes are
- * known, those are compared, so a file that dropped only trailing fill is not
- * read as shrunken; otherwise the raw sizes are. */
+ * A 0-byte file is never a plausible edit, judged on the raw size. A file whose
+ * size is fixed is shrunken below what it held at the last sync. And for every
+ * file, below half the recorded size means a truncated write: where both
+ * content sizes are known, those are compared, so a file that dropped only
+ * trailing fill is not read as shrunken; otherwise the raw sizes are. */
 static int gavel_implausibly_shrunken(const gavel_local_file *local_file, const gavel_bookkeeping *bookkeeping) {
     if (local_file->has_size && local_file->size == 0) {
         return 1;
     }
     if (bookkeeping == NULL) {
         return 0;
+    }
+    if (gavel_fixed_size_shrunken(local_file, bookkeeping)) {
+        return 1;
     }
     if (local_file->has_content_size && bookkeeping->has_last_sync_content_size) {
         return gavel_below_half(local_file->content_size, bookkeeping->last_sync_content_size);
