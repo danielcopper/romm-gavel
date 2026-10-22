@@ -3,6 +3,15 @@ name: Release
 on:
   push:
     branches: [main]
+  # Rebuilds and attaches the core artifact for a release that already exists,
+  # when the push run created the release but did not get as far as the
+  # artifact.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to build and attach the core artifact for (e.g. v2.0.0)"
+        required: true
+        type: string
 
 # No workflow-level permissions: each job below asks for exactly what it needs,
 # so a step added to the wrong job cannot quietly inherit write access.
@@ -15,15 +24,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release-please:
+  # release-please's two phases run as two jobs. In one step, a failure in the
+  # pull-request phase fails the step after the release phase has already cut
+  # the tag, and the artifact job, which needs a successful job, never runs.
+  release:
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: write
-      pull-requests: write
+    # Nothing here uses GITHUB_TOKEN: release-please acts with the App token.
+    permissions: {}
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      # The same App as the release-PR job below, so both phases act as one
+      # identity.
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ secrets.RELEASE_PLEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        id: release
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-pull-request: true
+
+  # After the release phase, so a merged release PR is tagged before the next
+  # one is built from the commits since.
+  release-pr:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Nothing here uses GITHUB_TOKEN: release-please acts with the App token.
+    permissions: {}
     steps:
       # Mint a GitHub App installation token so release-please's PR/branch
       # pushes are authored by the App, not GITHUB_TOKEN. Pushes made with
@@ -39,22 +78,39 @@ jobs:
           permission-pull-requests: write
 
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
-        id: release
         with:
           token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          skip-github-release: true
 
   core-artifact:
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created }}
+    needs: release
+    # !cancelled(): on a dispatch the release job is skipped, and a job whose
+    # need was skipped is skipped too unless its condition says otherwise.
+    if: >-
+      ${{ !cancelled() && (github.event_name == 'workflow_dispatch'
+      || needs.release.outputs.release_created == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Only to attach the built .so and its checksum to the release.
     permissions:
       contents: write
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || needs.release.outputs.tag_name }}
     steps:
+      - name: Check the tag names an existing release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "ERROR: not a release tag: $TAG"; exit 1; }
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null
+
+      # The tagged source, so a dispatch builds what the release names rather
+      # than whatever main holds by then.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
 
       - name: Build the shared library
         # -fno-builtin: the core is freestanding (no libc imports); without it
@@ -107,7 +163,6 @@ jobs:
       - name: Checksum and attach to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.release-please.outputs.tag_name }}
         run: |
           sha256sum libgavel-x86_64-linux.so > libgavel-x86_64-linux.so.sha256
           gh release upload "$TAG" libgavel-x86_64-linux.so libgavel-x86_64-linux.so.sha256 --clobber

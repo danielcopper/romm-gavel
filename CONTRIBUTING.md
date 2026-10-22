@@ -52,7 +52,9 @@ spec's reading, in the language the shipped code is written in, with the sanitiz
 
 - **PRs only** — `main` is protected; squash merges, the PR title becomes the commit (conventional-commit format,
   enforced by CI). [release-please](https://github.com/googleapis/release-please) turns merged commits into the next
-  release PR; merging that cuts the tag, the CHANGELOG entry, and the compiled core artifacts.
+  release PR; merging that cuts the tag, the CHANGELOG entry, and the compiled core artifacts. A release left without
+  its artifacts gets them from `gh workflow run release.yml -f tag=vX.Y.Z`, which builds, checks and attaches them from
+  the tagged source.
 - Every PR must keep the whole battery green: vector-shape validation (`scripts/validate_vectors.py`), the reference and
   core conformance runs, sanitizers, and formatting. Locally that is `mise run test`, `mise run sanitize`,
   `mise run validate` (see `mise.toml` for the toolchain — zig serves as the C compiler).
