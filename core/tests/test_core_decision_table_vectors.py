@@ -269,13 +269,13 @@ def test_null_bookkeeping_decides_like_an_empty_record():
         ctypes.byref(with_empty),
     )
 
-    assert with_null.action == with_empty.action == 0  # skip
-    assert with_null.adopt_baseline == with_empty.adopt_baseline == 1
+    assert with_null.action == with_empty.action == 3  # conflict
+    assert with_null.server_save_id == with_empty.server_save_id == 101
 
 
 @pytest.mark.parametrize(
     ("device_id", "expected_action"),
-    [(None, 0), (b"device-a", 3)],  # matches the NULL entry → skip; no match → conflict
+    [(None, 1), (b"device-a", 3)],  # matches the NULL entry → upload; no match → conflict
 )
 def test_absent_device_ids_match_each_other(device_id: bytes | None, expected_action: int):
     """Device ids compare for plain equality, so two absent ids are the same id.
@@ -297,6 +297,12 @@ def test_absent_device_ids_match_each_other(device_id: bytes | None, expected_ac
     saves[0].device_sync_count = 1
     local_file = ctypes.pointer(LocalFile(size=8192, has_size=1, mtime=1780401600.0, has_mtime=1))
 
+    # A diverged baseline keeps the two cases apart: without one, both the
+    # matched path (is_current, no baseline) and the unmatched one (no entry,
+    # no baseline, local hash known) decide conflict.
+    bookkeeping = ctypes.pointer(Bookkeeping(last_sync_hash=b"b" * 32, last_sync_server_hash=b"c" * 32,
+                                             last_sync_local_size=0, has_last_sync_local_size=0))
+
     result = SyncAction()
-    _LIB.gavel_compute_sync_action(local_file, saves, 1, None, device_id, b"a" * 32, ctypes.byref(result))
+    _LIB.gavel_compute_sync_action(local_file, saves, 1, bookkeeping, device_id, b"a" * 32, ctypes.byref(result))
     assert result.action == expected_action

@@ -120,13 +120,14 @@ The reference client's full model — one decision per `(rom, filename, slot)`:
 
 **`is_current=true`** — the server still tracks this device's last version:
 
-| Local file | Baseline                             | Action                                       |
-| ---------- | ------------------------------------ | -------------------------------------------- |
-| absent     | —                                    | download (recover the tracked content)       |
-| present    | none                                 | skip + adopt baseline                        |
-| present    | unchanged                            | skip (synced)                                |
-| present    | diverged, local implausibly shrunken | conflict (corrupt-local guard, invariant I3) |
-| present    | diverged                             | upload (`overwrite=false`; a 409 → ladder)   |
+| Local file | Baseline                             | Identity vs head | Action                                       |
+| ---------- | ------------------------------------ | ---------------- | -------------------------------------------- |
+| absent     | —                                    | —                | download (recover the tracked content)       |
+| present    | none                                 | match            | skip + adopt baseline                        |
+| present    | none                                 | no match         | conflict (unknown provenance)                |
+| present    | unchanged                            | —                | skip (synced)                                |
+| present    | diverged, local implausibly shrunken | —                | conflict (corrupt-local guard, invariant I3) |
+| present    | diverged                             | —                | upload (`overwrite=false`; a 409 → ladder)   |
 
 **`is_current=false`** — the server head moved past this device:
 
