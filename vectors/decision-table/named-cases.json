@@ -148,8 +148,40 @@
       }
     },
     {
-      "name": "current-no-baseline-adopts",
-      "rationale": "Current on the head, local present, but no baseline recorded yet \u2014 adopt one so future runs can detect drift. Pure bookkeeping, no transfer.",
+      "name": "current-no-baseline-parity",
+      "rationale": "Current on the head, local present without a baseline, but byte-identical to the head (parity \u2014 the only identity route without history): adopt it as the baseline so future runs can detect drift. Pure bookkeeping, no transfer.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 8192,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {},
+        "device_id": "device-a",
+        "local_hash": "cccccccccccccccccccccccccccccccc"
+      },
+      "expected": {
+        "action": "skip",
+        "reason": "synced",
+        "adopt_baseline": true
+      }
+    },
+    {
+      "name": "current-no-baseline-different",
+      "rationale": "Current on the head, local present without a baseline and NOT identical to the head: the differing hash is either an edit made since or local hashing drifting from the server's scheme, and without a baseline nothing tells which. Adopting it would hide an edit from every later run, and uploading it is a guess \u2014 unknown provenance, the user decides.",
       "input": {
         "local_file": {
           "filename": "game.srm",
@@ -174,9 +206,69 @@
         "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       },
       "expected": {
-        "action": "skip",
-        "reason": "synced",
-        "adopt_baseline": true
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-no-baseline-head-hash-unknown",
+      "rationale": "Current on the head, local present without a baseline, and the head states no content_hash: identity cannot be proven, and unknown never proves anything \u2014 conflict, not an adoption.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 8192,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {},
+        "device_id": "device-a",
+        "local_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
+      }
+    },
+    {
+      "name": "current-no-baseline-local-hash-unknown",
+      "rationale": "Current on the head, local present without a baseline, but the local hash could not be computed: identity cannot be proven \u2014 conflict, not an adoption.",
+      "input": {
+        "local_file": {
+          "filename": "game.srm",
+          "size": 8192,
+          "mtime": 1780398000.0
+        },
+        "server_saves_in_slot": [
+          {
+            "id": 101,
+            "updated_at": "2026-06-02T12:00:00Z",
+            "content_hash": "cccccccccccccccccccccccccccccccc",
+            "device_syncs": [
+              {
+                "device_id": "device-a",
+                "is_current": true
+              }
+            ]
+          }
+        ],
+        "files_state": {},
+        "device_id": "device-a",
+        "local_hash": null
+      },
+      "expected": {
+        "action": "conflict",
+        "server_save_id": 101
       }
     },
     {
@@ -320,7 +412,7 @@
     },
     {
       "name": "current-hash-unknown",
-      "rationale": "Current on the head but the local hash could not be computed: without it drift cannot be claimed \u2014 treat as in sync rather than guessing.",
+      "rationale": "Current on the head with a baseline recorded, but the local hash could not be computed: without it drift from the baseline cannot be claimed \u2014 treat as in sync rather than guessing.",
       "input": {
         "local_file": {
           "filename": "game.srm",

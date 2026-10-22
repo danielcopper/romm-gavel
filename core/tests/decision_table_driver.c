@@ -106,10 +106,13 @@ static const gavel_device_sync *oracle_entry(const gavel_server_save *head, cons
 static void oracle_when_is_current(const oracle_facts *f, gavel_sync_action *out) {
     if (!f->present) {
         out->action = GAVEL_ACTION_DOWNLOAD;
-    } else if (!f->has_baseline) {
+    } else if (!f->has_baseline && f->identical) {
         out->action = GAVEL_ACTION_SKIP;
         out->adopt_baseline = 1;
         out->server_save_id = 0;
+    } else if (!f->has_baseline) {
+        /* No baseline and no identity with the head: unknown provenance. */
+        out->action = GAVEL_ACTION_CONFLICT;
     } else if (!f->diverged) {
         out->action = GAVEL_ACTION_SKIP;
         out->server_save_id = 0;

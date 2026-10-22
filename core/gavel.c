@@ -211,13 +211,21 @@ static void gavel_set_conflict(gavel_sync_action *out, const gavel_server_save *
  * version on the head. */
 static void gavel_decide_when_is_current(const gavel_server_save *head, const gavel_local_file *local_file,
                                          const char *local_hash, const char *last_sync_hash,
-                                         const gavel_bookkeeping *bookkeeping, gavel_sync_action *out) {
+                                         const char *last_sync_server_hash, const gavel_bookkeeping *bookkeeping,
+                                         gavel_sync_action *out) {
     if (local_file == NULL) {
         gavel_set_download(out, head); /* recover the tracked content */
         return;
     }
+    /* With no baseline, nothing shows whether the local file is the version the
+     * server tracks or an edit made since; only byte-identity justifies adopting
+     * it as the baseline. Anything else is unknown provenance. */
     if (!gavel_truthy(last_sync_hash)) {
-        gavel_set_skip(out, GAVEL_SKIP_SYNCED, 1); /* adopt the current file as baseline */
+        if (gavel_local_matches_server(local_hash, head->content_hash, last_sync_hash, last_sync_server_hash)) {
+            gavel_set_skip(out, GAVEL_SKIP_SYNCED, 1);
+        } else {
+            gavel_set_conflict(out, head);
+        }
         return;
     }
     if (gavel_diverged_from_baseline(local_hash, last_sync_hash)) {
@@ -308,7 +316,8 @@ void gavel_compute_sync_action(const gavel_local_file *local_file, const gavel_s
     our_entry = gavel_find_device_sync(head, device_id);
 
     if (our_entry != NULL && our_entry->is_current) {
-        gavel_decide_when_is_current(head, local_file, local_hash, last_sync_hash, bookkeeping, out);
+        gavel_decide_when_is_current(head, local_file, local_hash, last_sync_hash, last_sync_server_hash, bookkeeping,
+                                     out);
         return;
     }
     if (our_entry != NULL) {
