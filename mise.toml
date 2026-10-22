@@ -14,16 +14,19 @@ run = "uv pip install --only-binary :all: -r requirements-ci.txt"
 description = "Recompile requirements-ci.txt from requirements-ci.in (run after editing the sources)"
 run = "uv pip compile requirements-ci.in -o requirements-ci.txt"
 
+# Every `zig cc` passes `-target native-native-gnu`: zig then links against the glibc it ships instead of asking the
+# host's `cc` where libc lives. A Homebrew gcc on PATH answers with its own lib directory, which holds crt1.o but no
+# libc.so, and the link fails.
 [tasks.build]
 description = "Build the core as a shared library (build/libgavel.so)"
 run = [
     "mkdir -p build",
-    "zig cc -std=c99 -Wall -Wextra -Werror -pedantic -fno-builtin -fPIC -shared -O2 core/gavel.c -o build/libgavel.so",
+    "zig cc -target native-native-gnu -std=c99 -Wall -Wextra -Werror -pedantic -fno-builtin -fPIC -shared -O2 core/gavel.c -o build/libgavel.so",
 ]
 
 [tasks.test]
 description = "Run every conformance vector against the reference, the C core, and the Python binding"
-run = "env CC='zig cc' python -m pytest reference/tests core/tests bindings/python/tests -q"
+run = "env CC='zig cc -target native-native-gnu' python -m pytest reference/tests core/tests bindings/python/tests -q"
 
 [tasks.test-artifact]
 description = "Run the core and binding vectors against the built library instead of a fresh compile"
@@ -34,9 +37,9 @@ run = "env GAVEL_LIBRARY=build/libgavel.so python -m pytest core/tests bindings/
 description = "Run the C drivers under ASan+UBSan"
 run = [
     "mkdir -p build",
-    "zig cc -std=c99 -Wall -Wextra -Werror -pedantic -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all core/tests/exhaustive_driver.c core/gavel.c -o build/gavel_driver",
+    "zig cc -target native-native-gnu -std=c99 -Wall -Wextra -Werror -pedantic -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all core/tests/exhaustive_driver.c core/gavel.c -o build/gavel_driver",
     "./build/gavel_driver",
-    "zig cc -std=c99 -Wall -Wextra -Werror -pedantic -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all core/tests/decision_table_driver.c core/gavel.c -o build/gavel_table_driver",
+    "zig cc -target native-native-gnu -std=c99 -Wall -Wextra -Werror -pedantic -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all core/tests/decision_table_driver.c core/gavel.c -o build/gavel_table_driver",
     "./build/gavel_table_driver",
 ]
 
