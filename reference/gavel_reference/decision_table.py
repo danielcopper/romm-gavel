@@ -76,13 +76,16 @@ def _decide_when_is_current(
     local_file: dict[str, Any] | None,
     local_hash: str | None,
     last_sync_hash: str | None,
+    last_sync_server_hash: str | None,
     last_sync_local_size: int | None,
 ) -> dict[str, Any]:
     """The server still tracks this device's last version on the head."""
     if local_file is None:
         return _download(head)
     if not last_sync_hash:
-        return _skip("synced", adopt_baseline=True)
+        if local_matches_server(local_hash, head.get("content_hash"), last_sync_hash, last_sync_server_hash):
+            return _skip("synced", adopt_baseline=True)
+        return _conflict(head)
     if local_hash and local_hash != last_sync_hash:
         if is_implausibly_shrunken(local_file.get("size"), last_sync_local_size):
             return _conflict(head)
@@ -160,7 +163,9 @@ def compute_sync_action(
     last_sync_local_size = files_state.get("last_sync_local_size")
 
     if our_entry and our_entry.get("is_current"):
-        return _decide_when_is_current(head, local_file, local_hash, last_sync_hash, last_sync_local_size)
+        return _decide_when_is_current(
+            head, local_file, local_hash, last_sync_hash, last_sync_server_hash, last_sync_local_size
+        )
     if our_entry is not None:
         return _decide_when_not_current(head, local_file, local_hash, last_sync_hash, last_sync_server_hash)
     return _decide_when_no_entry(head, local_file, local_hash, last_sync_hash, last_sync_server_hash)
