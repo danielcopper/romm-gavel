@@ -91,30 +91,46 @@ static int gavel_diverged_from_baseline(const char *local_hash, const char *last
     return gavel_truthy(local_hash) && !gavel_ids_equal(local_hash, last_sync_hash);
 }
 
-/* The corrupt-local guard (invariant I3): is this file implausibly smaller than
- * the size recorded at the last sync boundary?
+/* Is ``value`` below half of ``baseline``? A baseline of 0 or less never trips
+ * it.
  *
- * A 0-byte file is never a plausible edit. Below half the recorded size means a
- * truncated write. The threshold is the reference's ``size < baseline * 0.5``
- * rearranged into ``size < baseline - size`` — exact integer arithmetic that
- * cannot overflow (both operands are positive by the time it runs) and needs no
- * floating point. */
-static int gavel_implausibly_shrunken(const gavel_local_file *local_file, const gavel_bookkeeping *bookkeeping) {
-    if (!local_file->has_size) {
+ * The threshold is the reference's ``value < baseline * 0.5`` rearranged into
+ * ``value < baseline - value`` — exact integer arithmetic that cannot overflow
+ * (the baseline is positive and the value not negative by the time it runs)
+ * and needs no floating point. */
+static int gavel_below_half(int64_t value, int64_t baseline) {
+    if (baseline <= 0) {
         return 0;
     }
-    if (local_file->size == 0) {
-        return 1;
-    }
-    if (bookkeeping == NULL || !bookkeeping->has_last_sync_local_size || bookkeeping->last_sync_local_size <= 0) {
-        return 0;
-    }
-    if (local_file->size < 0) {
+    if (value < 0) {
         /* Nonsense from the caller, but it is below every positive threshold —
-         * decided here so the subtraction below only ever sees positives. */
+         * decided here so the subtraction below never sees a negative value. */
         return 1;
     }
-    return local_file->size < bookkeeping->last_sync_local_size - local_file->size;
+    return value < baseline - value;
+}
+
+/* The corrupt-local guard (invariant I3): is this file implausibly smaller than
+ * it was at the last sync boundary?
+ *
+ * A 0-byte file is never a plausible edit, judged on the raw size. Below half
+ * the recorded size means a truncated write: where both content sizes are
+ * known, those are compared, so a file that dropped only trailing fill is not
+ * read as shrunken; otherwise the raw sizes are. */
+static int gavel_implausibly_shrunken(const gavel_local_file *local_file, const gavel_bookkeeping *bookkeeping) {
+    if (local_file->has_size && local_file->size == 0) {
+        return 1;
+    }
+    if (bookkeeping == NULL) {
+        return 0;
+    }
+    if (local_file->has_content_size && bookkeeping->has_last_sync_content_size) {
+        return gavel_below_half(local_file->content_size, bookkeeping->last_sync_content_size);
+    }
+    if (!local_file->has_size || !bookkeeping->has_last_sync_local_size) {
+        return 0;
+    }
+    return gavel_below_half(local_file->size, bookkeeping->last_sync_local_size);
 }
 
 /* The timestamp fall-through: is the local file at least as new as the head?

@@ -189,3 +189,17 @@ def test_a_non_integral_size_is_refused(field: str):
 
     with pytest.raises(ValueError, match="whole number of bytes"):
         _CORE.compute_sync_action(local_file, [], files_state, _DEVICE, _HASH)
+
+
+@pytest.mark.parametrize("field", ["local_file", "files_state"])
+def test_a_non_integral_content_size_is_refused(field: str):
+    """A content size is whole bytes too, and goes through the same conversion."""
+    local_file: dict[str, Any] = {"filename": "game.srm", "size": 8192, "content_size": 8192, "mtime": _HEAD_EPOCH}
+    files_state: dict[str, Any] = {"last_sync_content_size": 8192}
+    if field == "local_file":
+        local_file["content_size"] = 1.5
+    else:
+        files_state["last_sync_content_size"] = 1.5
+
+    with pytest.raises(ValueError, match="whole number of bytes"):
+        _CORE.compute_sync_action(local_file, [], files_state, _DEVICE, _HASH)
