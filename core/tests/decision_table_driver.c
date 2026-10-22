@@ -4,10 +4,11 @@
  * The ladder's inputs are four hashes and can be walked exhaustively
  * (exhaustive_driver.c). The decision table's are nested objects, so this driver
  * crosses the axes that actually branch instead: local file present / absent /
- * incomplete / shrunken, the head's device_syncs entry, whether timestamps are
- * known, and which parts of the bookkeeping record exist. The run prints how
- * many combinations that came to — read it there rather than from here, since a
- * number in a comment goes stale the moment a fixture is added.
+ * incomplete / shrunken, with and without a content size, the head's
+ * device_syncs entry, whether timestamps are known, and which parts of the
+ * bookkeeping record exist. The run prints how many combinations that came to
+ * — read it there rather than from here, since a number in a comment goes stale
+ * the moment a fixture is added.
  *
  * Two things are checked on every combination:
  *   - the decision matches an oracle transcribed from SPEC.md's three decision
@@ -50,21 +51,23 @@ static int oracle_identity(const char *local, const char *server, const char *la
     return (truthy_equal(local, last_sync) && truthy_equal(last_sync_server, server)) || truthy_equal(local, server);
 }
 
-/* SPEC.md — invariant I3, as the reference spells it out: a 0-byte file, or one
- * below half the recorded size. */
+/* Below half of a recorded value; one of 0 or less is no threshold at all. */
+static int oracle_below_half(int64_t value, int64_t recorded) {
+    return recorded > 0 && (double)value < (double)recorded * 0.5;
+}
+
+/* SPEC.md — invariant I3: a raw size of 0; else, with a content size on both
+ * sides, a content size below half the recorded one; else a size below half
+ * the recorded size. */
 static int oracle_shrunken(const gavel_local_file *local_file, const gavel_bookkeeping *bk) {
-    double baseline;
-    if (!local_file->has_size) {
-        return 0;
-    }
-    if (local_file->size == 0) {
+    if (local_file->has_size && local_file->size == 0) {
         return 1;
     }
-    if (bk == NULL || !bk->has_last_sync_local_size || bk->last_sync_local_size <= 0) {
-        return 0;
+    if (bk != NULL && local_file->has_content_size && bk->has_last_sync_content_size) {
+        return oracle_below_half(local_file->content_size, bk->last_sync_content_size);
     }
-    baseline = (double)bk->last_sync_local_size * 0.5;
-    return (double)local_file->size < baseline;
+    return bk != NULL && local_file->has_size && bk->has_last_sync_local_size &&
+           oracle_below_half(local_file->size, bk->last_sync_local_size);
 }
 
 /* The facts SPEC.md's three branch tables read, computed once. */
@@ -211,8 +214,8 @@ static gavel_sync_action oracle_decide(const gavel_local_file *local_file, const
  * The swept input space
  * ------------------------------------------------------------------------- */
 
-#define N_LOCAL_FILES 7
-#define N_BOOKKEEPING 6
+#define N_LOCAL_FILES 14
+#define N_BOOKKEEPING 9
 #define N_HASHES 4
 #define N_TIMESTAMPS 4
 #define N_SYNC_SETS 6
@@ -260,6 +263,36 @@ static void init_fixtures(void) {
     LOCAL_FILES[6].has_size = 1;
     LOCAL_FILES[6].mtime = EQUAL_EPOCH;
     LOCAL_FILES[6].has_mtime = 1;
+    /* With a content size. Against BOOKKEEPING[6..8], which record one, the
+     * guard compares content sizes (after the 0-byte rule); against the rest,
+     * raw sizes where both are known. */
+    LOCAL_FILES[7].size = 32768; /* fill dropped: below half of 131072 raw */
+    LOCAL_FILES[7].has_size = 1;
+    LOCAL_FILES[7].content_size = 32768;
+    LOCAL_FILES[7].has_content_size = 1;
+    LOCAL_FILES[8].size = 8192; /* a blank save: fill only */
+    LOCAL_FILES[8].has_size = 1;
+    LOCAL_FILES[8].content_size = 0;
+    LOCAL_FILES[8].has_content_size = 1;
+    LOCAL_FILES[9].size = 8192; /* just below half of an 8192-byte content */
+    LOCAL_FILES[9].has_size = 1;
+    LOCAL_FILES[9].content_size = 4095;
+    LOCAL_FILES[9].has_content_size = 1;
+    LOCAL_FILES[10].size = 8192; /* exactly half: not below it */
+    LOCAL_FILES[10].has_size = 1;
+    LOCAL_FILES[10].content_size = 4096;
+    LOCAL_FILES[10].has_content_size = 1;
+    LOCAL_FILES[11].has_size = 0; /* a content size without a raw one */
+    LOCAL_FILES[11].content_size = 100;
+    LOCAL_FILES[11].has_content_size = 1;
+    LOCAL_FILES[12].size = 8192; /* the negative branch, for the content sizes */
+    LOCAL_FILES[12].has_size = 1;
+    LOCAL_FILES[12].content_size = -1;
+    LOCAL_FILES[12].has_content_size = 1;
+    LOCAL_FILES[13].size = 0; /* 0 bytes are refused whatever the content says */
+    LOCAL_FILES[13].has_size = 1;
+    LOCAL_FILES[13].content_size = 0;
+    LOCAL_FILES[13].has_content_size = 1;
 
     /* index 0 is unused — the sweep passes NULL for "no record held". */
     BOOKKEEPING[1].last_sync_hash = NULL;
@@ -276,6 +309,19 @@ static void init_fixtures(void) {
     BOOKKEEPING[5].last_sync_server_hash = NULL;
     BOOKKEEPING[5].last_sync_local_size = 0; /* recorded but <= 0: guard stays off */
     BOOKKEEPING[5].has_last_sync_local_size = 1;
+    BOOKKEEPING[6].last_sync_hash = HASH_A; /* a save of fill only, as mGBA writes one */
+    BOOKKEEPING[6].last_sync_local_size = 131072;
+    BOOKKEEPING[6].has_last_sync_local_size = 1;
+    BOOKKEEPING[6].last_sync_content_size = 0;
+    BOOKKEEPING[6].has_last_sync_content_size = 1;
+    BOOKKEEPING[7].last_sync_hash = HASH_A;
+    BOOKKEEPING[7].last_sync_local_size = 8192;
+    BOOKKEEPING[7].has_last_sync_local_size = 1;
+    BOOKKEEPING[7].last_sync_content_size = 8192;
+    BOOKKEEPING[7].has_last_sync_content_size = 1;
+    BOOKKEEPING[8].last_sync_hash = HASH_B; /* a content size without a raw one */
+    BOOKKEEPING[8].last_sync_content_size = 8192;
+    BOOKKEEPING[8].has_last_sync_content_size = 1;
 
     SYNC_COUNTS[0] = 0;
     SYNC_ENTRIES[1][0].device_id = DEVICE_ID;

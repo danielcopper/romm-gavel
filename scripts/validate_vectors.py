@@ -29,7 +29,12 @@ TABLE_INPUT_FIELDS = {
     "device_id",
     "local_hash",
 }
-TABLE_FILES_STATE_FIELDS = {"last_sync_hash", "last_sync_server_hash", "last_sync_local_size"}
+TABLE_FILES_STATE_FIELDS = {
+    "last_sync_hash",
+    "last_sync_server_hash",
+    "last_sync_local_size",
+    "last_sync_content_size",
+}
 # The decision-table actions. Kept in step with TABLE_EXPECTED_SHAPES below by
 # construction — see the assertion next to it.
 TABLE_ACTIONS = {"skip", "upload", "download", "conflict"}
@@ -47,6 +52,12 @@ def _is_save_id(value: Any) -> bool:
     """A save id is an integer. ``bool`` subclasses ``int`` in Python, so
     ``isinstance(True, int)`` holds and has to be excluded by name."""
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _is_size_or_unknown(value: Any) -> bool:
+    """A size or content size is an integer or null, never a bool (see
+    ``_is_save_id``)."""
+    return value is None or (isinstance(value, int) and not isinstance(value, bool))
 
 
 def _hash_or_unknown(name: str, field: str, value: Any) -> None:
@@ -72,9 +83,9 @@ def _validate_local_file(name: str, local_file: Any) -> None:
         fail(f"{name}: local_file must be an object or null")
     if not isinstance(local_file.get("filename"), str):
         fail(f"{name}: local_file.filename must be a string")
-    size = local_file.get("size")
-    if size is not None and not isinstance(size, int):
-        fail(f"{name}: local_file.size must be an integer or null")
+    for field in ("size", "content_size"):
+        if not _is_size_or_unknown(local_file.get(field)):
+            fail(f"{name}: local_file.{field} must be an integer or null")
     mtime = local_file.get("mtime")
     if mtime is not None and not isinstance(mtime, int | float):
         fail(f"{name}: local_file.mtime must be a number or null")
@@ -172,9 +183,9 @@ def validate_table_vector(vector: dict[str, Any]) -> None:
         fail(f"{name}: files_state keys must be a subset of {sorted(TABLE_FILES_STATE_FIELDS)}")
     _hash_or_unknown(name, "files_state.last_sync_hash", files_state.get("last_sync_hash"))
     _hash_or_unknown(name, "files_state.last_sync_server_hash", files_state.get("last_sync_server_hash"))
-    size = files_state.get("last_sync_local_size")
-    if size is not None and not isinstance(size, int):
-        fail(f"{name}: files_state.last_sync_local_size must be an integer or null")
+    for field in ("last_sync_local_size", "last_sync_content_size"):
+        if not _is_size_or_unknown(files_state.get(field)):
+            fail(f"{name}: files_state.{field} must be an integer or null")
     if not isinstance(inp["device_id"], str):
         fail(f"{name}: device_id must be a string")
     _hash_or_unknown(name, "local_hash", inp["local_hash"])

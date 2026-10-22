@@ -32,11 +32,12 @@ therefore a server question before it is a spec one.
 At each **successful sync boundary** — an upload the server acknowledged, a completed download, or an explicit baseline
 adoption — the client records, per synced file:
 
-| Field                   | Value                                                                                         |
-| ----------------------- | --------------------------------------------------------------------------------------------- |
-| `last_sync_hash`        | the client's own content hash of the local file as it existed at that boundary (the baseline) |
-| `last_sync_server_hash` | the server's `content_hash` for the same synced version, stored verbatim                      |
-| `last_sync_local_size`  | the local file's size at that boundary (backs invariant I3)                                   |
+| Field                    | Value                                                                                         |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
+| `last_sync_hash`         | the client's own content hash of the local file as it existed at that boundary (the baseline) |
+| `last_sync_server_hash`  | the server's `content_hash` for the same synced version, stored verbatim                      |
+| `last_sync_local_size`   | the local file's size at that boundary (backs invariant I3)                                   |
+| `last_sync_content_size` | the local file's content size at that boundary (see Inputs; backs invariant I3)               |
 
 Rules:
 
@@ -103,11 +104,11 @@ Missing or empty information never yields **download** — the safe default unde
 
 | Input                  | Shape                                                                                                    | Source                                 |
 | ---------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `local_file`           | `{filename, size, mtime}` or absent                                                                      | client filesystem                      |
+| `local_file`           | `{filename, size, content_size, mtime}` or absent                                                        | client filesystem                      |
 | `server_saves_in_slot` | list of RomM save objects (`id`, `updated_at`, `content_hash`, `device_syncs[].{device_id, is_current}`) | RomM API                               |
 | `device_id`            | string                                                                                                   | RomM device registration               |
 | `local_hash`           | content hash of the local file, or unknown                                                               | client (RomM-parity scheme, zip-aware) |
-| bookkeeping record     | `last_sync_hash`, `last_sync_server_hash`, `last_sync_local_size`, or absent                             | client-held state (see Bookkeeping)    |
+| bookkeeping record     | `last_sync_hash`, `last_sync_server_hash`, `last_sync_local_size`, `last_sync_content_size`, or absent   | client-held state (see Bookkeeping)    |
 
 **`local_file` presence is the existence of the file, not what is known about it** (normative). Absent means there is no
 local file at all; anything else is a present file, including one whose `size` or `mtime` the client could not read.
@@ -116,8 +117,15 @@ degrade into "absent" once the fields are missing will answer the same state two
 Getting it wrong is not symmetric: reading a present file as absent can leave the only copy unbacked in silence, while
 reading an absent one as present fails loudly in the client's own file I/O.
 
-Individual field values stay optional and unknown-tolerant as the decision table describes — an unknown `size` merely
-means the corrupt-local guard cannot fire, not that the file is gone.
+Individual field values stay optional and unknown-tolerant as the decision table describes — an unknown `size` or
+`content_size` merely means the corrupt-local guard decides on what is known (see the note under the `is_current=true`
+table), not that the file is gone.
+
+**The content size** (normative) is a file's size less the trailing run of the byte the file ends with, when that byte
+is `0xFF` or `0x00`, the two fill bytes. A file ending in any other byte has a content size equal to its size; a file of
+fill only, like an empty one, has content size 0. It is defined here so every client computes it alike: the guard
+compares the local file's `content_size` with the recorded `last_sync_content_size`, and the core and the vectors read
+both by this definition. The client computes it from the file's bytes.
 
 ## Decision table (informative)
 
@@ -137,6 +145,11 @@ The reference client's full model — one decision per `(rom, filename, slot)`:
 | present    | unchanged                            | —                | skip (synced)                                |
 | present    | diverged, local implausibly shrunken | —                | conflict (corrupt-local guard, invariant I3) |
 | present    | diverged                             | —                | upload (`overwrite=false`; a 409 → ladder)   |
+
+The corrupt-local guard reads _implausibly shrunken_ as: a `size` of 0; else, where the local file and the bookkeeping
+record both state a content size, a `content_size` below half of `last_sync_content_size`; else a `size` below half of
+`last_sync_local_size`. A non-empty file of fill only is not refused for that alone: where both content sizes are
+stated, it trips the guard whenever the recorded content was larger than 0.
 
 **`is_current=false`** — the server does not hold this device as current on the head: the head moved past it, or (on
 RomM with a `device_id`) it never synced this save:
@@ -180,7 +193,8 @@ Notes:
 
 - **I1** — No destructive action without a recovery source.
 - **I2** — Never silently overwrite an unbacked local edit.
-- **I3** — A corrupt or implausibly shrunken local file never auto-uploads.
+- **I3** — A corrupt or implausibly shrunken local file never auto-uploads. A shrink that drops only trailing fill is
+  not a shrink.
 - **I4** — Byte-identity (hash equality with the server save) is always safe to adopt.
 - **I5** — Automatic uploads never force-overwrite; the server's 409 is the write-time backstop, and the fallback
   re-decides from hashes only (unchanged local → download; anything else → conflict). Force-overwrite happens only on an

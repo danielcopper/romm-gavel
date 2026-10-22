@@ -86,11 +86,12 @@ becoming the de-facto contract.
 ## What the contract decides
 
 - **Bookkeeping** (normative) — at each successful sync boundary the client records `last_sync_hash` (its own baseline),
-  `last_sync_server_hash` (the server's value, stored verbatim) and `last_sync_local_size`. Recorded only at successful
-  boundaries, never speculatively; a value that could not be obtained is recorded as absent, never as an empty string,
-  because absent means unknown and unknown never proves anything. An adoption the decision marks `acknowledge` is first
-  confirmed to the server as synced (on RomM, `POST /api/saves/{id}/downloaded`), and its baseline is recorded only once
-  that succeeded.
+  `last_sync_server_hash` (the server's value, stored verbatim), `last_sync_local_size` and `last_sync_content_size`
+  (the file's size less its trailing fill, as SPEC.md defines it). Recorded only at successful boundaries, never
+  speculatively; a value that could not be obtained is recorded as absent, never as an empty string, because absent
+  means unknown and unknown never proves anything. An adoption the decision marks `acknowledge` is first confirmed to
+  the server as synced (on RomM, `POST /api/saves/{id}/downloaded`), and its baseline is recorded only once that
+  succeeded.
 - **The identity check** (normative) — _"is my local file byte-identical to that server save?"_, answered by two routes
   so a drift between the client's hashing and the server's scheme never silently breaks identity: **provenance** (local
   unchanged since the baseline, and that baseline synced against this exact server content) as the primary, **parity**

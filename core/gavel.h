@@ -130,32 +130,38 @@ typedef struct {
 
 /* The local file, when one exists.
  *
- * ``size`` backs the corrupt-local guard (invariant I3) and ``mtime`` (epoch
- * seconds) the timestamp fall-through; each is optional. The filename is not a
- * field: it addresses which slot is being decided, and the decision itself
- * never reads it.
+ * ``size`` and ``content_size`` back the corrupt-local guard (invariant I3) and
+ * ``mtime`` (epoch seconds) the timestamp fall-through; each is optional.
+ * ``content_size`` is the content size SPEC.md defines under "Inputs" (the size
+ * less its trailing fill); the caller computes it. The filename is not a field:
+ * it addresses which slot is being decided, and the decision itself never reads
+ * it.
  *
  * Presence is carried by the pointer alone, never by the flags: a struct with
- * both ``has_size`` and ``has_mtime`` clear is a file that exists and could not
- * be measured, not a missing one. That is what SPEC.md requires of every
- * representation, and NULL-vs-pointer is how this ABI keeps the question
- * two-valued. */
+ * every ``has_*`` flag clear is a file that exists and could not be measured,
+ * not a missing one. That is what SPEC.md requires of every representation, and
+ * NULL-vs-pointer is how this ABI keeps the question two-valued. */
 typedef struct {
     int64_t size;
     int has_size;
     double mtime;
     int has_mtime;
+    int64_t content_size;
+    int has_content_size;
 } gavel_local_file;
 
 /* The client's bookkeeping record for this file (SPEC.md — "Bookkeeping").
  *
  * The hashes follow the usual rule (NULL or "" means unknown); the recorded
- * local size is optional via ``has_last_sync_local_size``. */
+ * local size and content size are optional via ``has_last_sync_local_size`` and
+ * ``has_last_sync_content_size``. */
 typedef struct {
     const char *last_sync_hash;
     const char *last_sync_server_hash;
     int64_t last_sync_local_size;
     int has_last_sync_local_size;
+    int64_t last_sync_content_size;
+    int has_last_sync_content_size;
 } gavel_bookkeeping;
 
 /* What the client should do with this (rom, filename, slot). */

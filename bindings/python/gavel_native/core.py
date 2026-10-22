@@ -82,6 +82,8 @@ class _LocalFile(ctypes.Structure):
         ("has_size", ctypes.c_int),
         ("mtime", ctypes.c_double),
         ("has_mtime", ctypes.c_int),
+        ("content_size", ctypes.c_int64),
+        ("has_content_size", ctypes.c_int),
     )
 
 
@@ -91,6 +93,8 @@ class _Bookkeeping(ctypes.Structure):
         ("last_sync_server_hash", ctypes.c_char_p),
         ("last_sync_local_size", ctypes.c_int64),
         ("has_last_sync_local_size", ctypes.c_int),
+        ("last_sync_content_size", ctypes.c_int64),
+        ("has_last_sync_content_size", ctypes.c_int),
     )
 
 
@@ -119,12 +123,13 @@ def _optional_timestamp(value: object) -> tuple[float, int]:
 
 
 def _optional_size(value: object, field: str) -> tuple[int, int]:
-    """A dict value → the core's ``(size, has_size)`` pair.
+    """A dict value → the core's ``(value, has_value)`` pair, for a size or a content size.
 
-    Sizes are whole numbers of bytes; the ABI carries them as ``int64_t``. A
+    Both are whole numbers of bytes; the ABI carries them as ``int64_t``. A
     value that is not integral cannot be represented, and quietly rounding it
-    would land on 0 — the one value the corrupt-local guard reacts to — so it
-    raises instead. Absent stays absent.
+    could land on 0 — a raw size the corrupt-local guard refuses outright, a
+    content size it reads as a file of fill only — so it raises instead. Absent
+    stays absent.
     """
     if value is None:
         return 0, 0
@@ -238,7 +243,17 @@ def _build_local_file(local_file: dict[str, Any] | None) -> Any:
         return None
     size, has_size = _optional_size(local_file.get("size"), "local_file.size")
     mtime, has_mtime = _optional_timestamp(local_file.get("mtime"))
-    return ctypes.pointer(_LocalFile(size=size, has_size=has_size, mtime=mtime, has_mtime=has_mtime))
+    content_size, has_content_size = _optional_size(local_file.get("content_size"), "local_file.content_size")
+    return ctypes.pointer(
+        _LocalFile(
+            size=size,
+            has_size=has_size,
+            mtime=mtime,
+            has_mtime=has_mtime,
+            content_size=content_size,
+            has_content_size=has_content_size,
+        )
+    )
 
 
 def _build_bookkeeping(files_state: dict[str, Any], keepalive: list[object]) -> Any:
@@ -253,12 +268,17 @@ def _build_bookkeeping(files_state: dict[str, Any], keepalive: list[object]) -> 
     last_sync_server_hash = _encode(files_state.get("last_sync_server_hash"))
     keepalive.extend((last_sync_hash, last_sync_server_hash))
     size, has_size = _optional_size(files_state.get("last_sync_local_size"), "files_state.last_sync_local_size")
+    content_size, has_content_size = _optional_size(
+        files_state.get("last_sync_content_size"), "files_state.last_sync_content_size"
+    )
     return ctypes.pointer(
         _Bookkeeping(
             last_sync_hash=last_sync_hash,
             last_sync_server_hash=last_sync_server_hash,
             last_sync_local_size=size,
             has_last_sync_local_size=has_size,
+            last_sync_content_size=content_size,
+            has_last_sync_content_size=has_content_size,
         )
     )
 

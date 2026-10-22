@@ -33,15 +33,32 @@ def parse_iso_to_epoch(value: str | None) -> float | None:
         return None
 
 
-def is_implausibly_shrunken(new_size: int | None, baseline_size: int | None) -> bool:
-    """A 0-byte file is never a plausible edit; below half the recorded size is a truncated write."""
-    if new_size is None:
+def _below_half(value: int, baseline: int | None) -> bool:
+    """Below half the recorded value; a recorded value of 0 or less never trips it."""
+    if baseline is None or baseline <= 0:
         return False
+    return value < baseline * SHRINK_RATIO
+
+
+def is_implausibly_shrunken(
+    new_size: int | None,
+    baseline_size: int | None,
+    new_content_size: int | None,
+    baseline_content_size: int | None,
+) -> bool:
+    """A 0-byte file is never a plausible edit; below half the recorded size is a truncated write.
+
+    Where both content sizes are known, they are what is halved, so a file that
+    dropped only trailing fill is not read as shrunken. The 0-byte rule stays on
+    the raw size.
+    """
     if new_size == 0:
         return True
-    if baseline_size is None or baseline_size <= 0:
+    if new_content_size is not None and baseline_content_size is not None:
+        return _below_half(new_content_size, baseline_content_size)
+    if new_size is None:
         return False
-    return new_size < baseline_size * SHRINK_RATIO
+    return _below_half(new_size, baseline_size)
 
 
 def _local_mtime_ge_head(local_file: dict[str, Any], head: dict[str, Any]) -> bool:
@@ -94,6 +111,7 @@ def _decide_when_is_current(
     last_sync_hash: str | None,
     last_sync_server_hash: str | None,
     last_sync_local_size: int | None,
+    last_sync_content_size: int | None,
 ) -> dict[str, Any]:
     """The server still tracks this device's last version on the head."""
     if local_file is None:
@@ -103,7 +121,9 @@ def _decide_when_is_current(
             return _adopt(head, acknowledge=False)
         return _conflict(head)
     if local_hash and local_hash != last_sync_hash:
-        if is_implausibly_shrunken(local_file.get("size"), last_sync_local_size):
+        if is_implausibly_shrunken(
+            local_file.get("size"), last_sync_local_size, local_file.get("content_size"), last_sync_content_size
+        ):
             return _conflict(head)
         return _upload(head.get("id"))
     return _skip("synced")
@@ -173,10 +193,17 @@ def compute_sync_action(
     last_sync_hash = files_state.get("last_sync_hash")
     last_sync_server_hash = files_state.get("last_sync_server_hash")
     last_sync_local_size = files_state.get("last_sync_local_size")
+    last_sync_content_size = files_state.get("last_sync_content_size")
 
     if our_entry and our_entry.get("is_current"):
         return _decide_when_is_current(
-            head, local_file, local_hash, last_sync_hash, last_sync_server_hash, last_sync_local_size
+            head,
+            local_file,
+            local_hash,
+            last_sync_hash,
+            last_sync_server_hash,
+            last_sync_local_size,
+            last_sync_content_size,
         )
     if our_entry is not None:
         return _decide_when_not_current(head, local_file, local_hash, last_sync_hash, last_sync_server_hash)

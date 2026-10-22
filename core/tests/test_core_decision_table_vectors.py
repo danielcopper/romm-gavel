@@ -58,6 +58,8 @@ class LocalFile(ctypes.Structure):
         ("has_size", ctypes.c_int),
         ("mtime", ctypes.c_double),
         ("has_mtime", ctypes.c_int),
+        ("content_size", ctypes.c_int64),
+        ("has_content_size", ctypes.c_int),
     )
 
 
@@ -67,6 +69,8 @@ class Bookkeeping(ctypes.Structure):
         ("last_sync_server_hash", ctypes.c_char_p),
         ("last_sync_local_size", ctypes.c_int64),
         ("has_last_sync_local_size", ctypes.c_int),
+        ("last_sync_content_size", ctypes.c_int64),
+        ("has_last_sync_content_size", ctypes.c_int),
     )
 
 
@@ -149,12 +153,15 @@ def call_core(inputs: dict[str, Any]) -> dict[str, Any]:
     if local_file is not None:
         size = local_file.get("size")
         mtime = local_file.get("mtime")
+        content_size = local_file.get("content_size")
         c_local_file = ctypes.pointer(
             LocalFile(
                 size=int(size) if size is not None else 0,
                 has_size=int(size is not None),
                 mtime=float(mtime) if mtime is not None else 0.0,
                 has_mtime=int(mtime is not None),
+                content_size=int(content_size) if content_size is not None else 0,
+                has_content_size=int(content_size is not None),
             )
         )
 
@@ -185,6 +192,7 @@ def call_core(inputs: dict[str, Any]) -> dict[str, Any]:
 
     files_state = inputs["files_state"]
     recorded_size = files_state.get("last_sync_local_size")
+    recorded_content_size = files_state.get("last_sync_content_size")
     last_sync_hash = _encode(files_state.get("last_sync_hash"))
     last_sync_server_hash = _encode(files_state.get("last_sync_server_hash"))
     keepalive += [last_sync_hash, last_sync_server_hash]
@@ -194,6 +202,8 @@ def call_core(inputs: dict[str, Any]) -> dict[str, Any]:
             last_sync_server_hash=last_sync_server_hash,
             last_sync_local_size=int(recorded_size) if recorded_size is not None else 0,
             has_last_sync_local_size=int(recorded_size is not None),
+            last_sync_content_size=int(recorded_content_size) if recorded_content_size is not None else 0,
+            has_last_sync_content_size=int(recorded_content_size is not None),
         )
     )
 
